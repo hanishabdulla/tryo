@@ -4,6 +4,7 @@ import { v } from "convex/values";
 const CONFIG_ENTRIES: Array<{ key: string; value: unknown }> = [
   { key: "mealUpcharge", value: 249 },
   { key: "mealComboLabel", value: "Fries + Coke" },
+  { key: "mealComboLabelWraps", value: "Fries + Drink" },
   { key: "businessName", value: "Tryo" },
   {
     key: "businessAddress",
@@ -11,7 +12,7 @@ const CONFIG_ENTRIES: Array<{ key: string; value: unknown }> = [
   },
   { key: "businessPhone", value: "+44 7825583940" },
   { key: "businessVat", value: "491891448" },
-  { key: "receiptQrUrl", value: "https://tryoeats.co.uk/" },
+  { key: "receiptQrUrl", value: "https://www.tryoeats.uk/" },
 ];
 
 type SeedItem = { name: string; basePrice: number; sortOrder: number };

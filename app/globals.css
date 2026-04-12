@@ -3,11 +3,19 @@
 :root {
   --background: #09090b;
   --foreground: #fafafa;
+  /* Tryo brand — https://www.tryoeats.uk/ (replaces former amber accent) */
+  --tryo-green: #00955e;
+  --tryo-green-hover: #007a4c;
+  --tryo-green-soft: rgba(0, 149, 94, 0.18);
+  --tryo-glow: 0 0 28px -6px rgba(0, 149, 94, 0.45);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-tryo: var(--tryo-green);
+  --color-tryo-hover: var(--tryo-green-hover);
+  --color-tryo-soft: var(--tryo-green-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

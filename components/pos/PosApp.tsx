@@ -76,7 +76,9 @@ export default function PosApp() {
   const config = useMenuConfigMap();
   const categoryMenuItems = useCategoryMenuItems(activeCategory);
 
-  const mealEligible = activeCategory.convexCategory === "Burgers";
+  const mealEligible =
+    activeCategory.convexCategory === "Burgers" ||
+    activeCategory.convexCategory === "Wraps";
 
   const seedDb = useMutation(api.seed.seed);
   const submitOrder = useMutation(api.orders.submitOrder);
@@ -98,6 +100,16 @@ export default function PosApp() {
     return typeof v === "string" && v.length > 0 ? v : "Fries + Coke";
   }, [config]);
 
+  const mealComboLabelWraps = useMemo(() => {
+    const v = config?.mealComboLabelWraps;
+    return typeof v === "string" && v.length > 0 ? v : "Fries + Drink";
+  }, [config]);
+
+  const activeMealComboLabel =
+    activeCategory.convexCategory === "Wraps"
+      ? mealComboLabelWraps
+      : mealComboLabel;
+
   const businessName =
     typeof config?.businessName === "string" ? config.businessName : "Tryo";
   const businessAddress =
@@ -113,7 +125,7 @@ export default function PosApp() {
   const qrUrl =
     typeof config?.receiptQrUrl === "string"
       ? config.receiptQrUrl
-      : "https://tryoeats.co.uk/";
+      : "https://www.tryoeats.uk/";
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -185,7 +197,7 @@ export default function PosApp() {
     const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
     const unit = sheetItem.basePrice + up;
-    const label = isMeal ? mealComboLabel : null;
+    const label = isMeal ? activeMealComboLabel : null;
     const key = lineKey(sheetItem.name, isMeal);
     setCart((prev) => {
       const idx = prev.findIndex((l) => l.lineKey === key);
@@ -215,7 +227,7 @@ export default function PosApp() {
     setSheetItem(null);
   }, [
     activeCategory.convexCategory,
-    mealComboLabel,
+    activeMealComboLabel,
     mealEligible,
     mealUpchargePence,
     sheetItem,
@@ -384,7 +396,7 @@ export default function PosApp() {
                     className={[
                       "min-h-14 shrink-0 rounded-2xl px-5 text-sm font-semibold transition-colors",
                       active
-                        ? "bg-amber-400 text-zinc-950"
+                        ? "bg-[#00955e] text-white shadow-[var(--tryo-glow)]"
                         : "bg-zinc-900 text-zinc-200",
                     ].join(" ")}
                   >
@@ -412,12 +424,12 @@ export default function PosApp() {
                     key={item._id}
                     type="button"
                     onClick={() => onTileTap(item)}
-                    className="flex min-h-[88px] flex-col items-start justify-between rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 text-left transition-transform active:scale-[0.98]"
+                    className="flex min-h-[88px] flex-col items-start justify-between rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 text-left transition-transform hover:border-[#00955e]/35 hover:shadow-[0_0_24px_-8px_rgba(0,149,94,0.25)] active:scale-[0.98]"
                   >
                     <span className="text-base font-semibold leading-snug text-white">
                       {item.name}
                     </span>
-                    <span className="mt-2 text-lg font-bold text-amber-300">
+                    <span className="mt-2 text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
                       {formatPence(item.basePrice)}
                     </span>
                   </button>
@@ -462,7 +474,8 @@ export default function PosApp() {
                                 {line.mealLabel}
                               </span>
                             </span>
-                          ) : line.sourceCategory === "Burgers" ? (
+                          ) : line.sourceCategory === "Burgers" ||
+                            line.sourceCategory === "Wraps" ? (
                             <span>Individual</span>
                           ) : (
                             <span>Regular</span>
@@ -470,7 +483,7 @@ export default function PosApp() {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-sm font-semibold text-amber-300">
+                        <div className="text-sm font-semibold text-[#00955e]">
                           {formatPence(line.unitPricePence * line.quantity)}
                         </div>
                       </div>
@@ -526,7 +539,7 @@ export default function PosApp() {
             </div>
             <div className="flex justify-between text-lg font-bold text-white">
               <span>Total</span>
-              <span className="text-amber-300">
+              <span className="text-[#00955e] drop-shadow-[0_0_12px_rgba(0,149,94,0.3)]">
                 {formatPence(cartSubtotalPence + deliveryFeePence)}
               </span>
             </div>
@@ -540,7 +553,7 @@ export default function PosApp() {
                 setDiscountKind("percentage");
                 setDiscountRaw("");
               }}
-              className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-amber-400 text-lg font-bold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#00955e] text-lg font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
               Save &amp; Pay
             </button>
@@ -587,11 +600,11 @@ export default function PosApp() {
                   className={[
                     "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
                     !sheetMeal
-                      ? "border-amber-400/70 bg-amber-400/10 text-white"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Individual
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                ].join(" ")}
+              >
+                Individual
                   <div className="mt-1 text-xs font-normal text-zinc-400">
                     Base price only
                   </div>
@@ -602,13 +615,13 @@ export default function PosApp() {
                   className={[
                     "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
                     sheetMeal
-                      ? "border-amber-400/70 bg-amber-400/10 text-white"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Make it a Meal
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                ].join(" ")}
+              >
+                Make it a Meal
                   <div className="mt-1 text-xs font-normal text-zinc-400">
-                    + {formatPence(mealUpchargePence)} · {mealComboLabel}
+                    + {formatPence(mealUpchargePence)} · {activeMealComboLabel}
                   </div>
                 </button>
               </div>
@@ -649,7 +662,7 @@ export default function PosApp() {
               </button>
               <button
                 type="button"
-                className="min-h-14 rounded-2xl bg-amber-400 font-bold text-zinc-950"
+                className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c]"
                 onClick={addFromSheet}
               >
                 Add to Cart
@@ -692,7 +705,7 @@ export default function PosApp() {
                 </span>
               </div>
               {discountPence > 0 ? (
-                <div className="flex justify-between gap-3 text-emerald-300/90">
+                <div className="flex justify-between gap-3 text-[#00955e]">
                   <span>
                     {discountKind === "percentage"
                       ? `Discount (${parsePercentDiscountInput(discountRaw)}%)`
@@ -707,7 +720,7 @@ export default function PosApp() {
             <p className="mt-2 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
               Amount due
             </p>
-            <div className="text-center text-4xl font-extrabold text-amber-300">
+            <div className="text-center text-4xl font-extrabold text-[#00955e] drop-shadow-[0_0_20px_rgba(0,149,94,0.35)]">
               {formatPence(amountDuePence)}
             </div>
 
@@ -725,11 +738,11 @@ export default function PosApp() {
                   className={[
                     "min-h-14 rounded-2xl border text-sm font-bold",
                     discountKind === "percentage"
-                      ? "border-amber-400/70 bg-amber-400/10 text-white"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Percentage
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                ].join(" ")}
+              >
+                Percentage
                 </button>
                 <button
                   type="button"
@@ -740,11 +753,11 @@ export default function PosApp() {
                   className={[
                     "min-h-14 rounded-2xl border text-sm font-bold",
                     discountKind === "fixed"
-                      ? "border-amber-400/70 bg-amber-400/10 text-white"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Fixed (£)
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                ].join(" ")}
+              >
+                Fixed (£)
                 </button>
               </div>
               <label className="mt-3 block text-sm font-semibold text-zinc-300">
@@ -754,7 +767,7 @@ export default function PosApp() {
               </label>
               <input
                 inputMode="decimal"
-                className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-amber-400/60"
+                className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
                 value={discountRaw}
                 onChange={(e) => setDiscountRaw(e.target.value)}
                 placeholder={discountKind === "percentage" ? "0" : "0.00"}
@@ -773,7 +786,7 @@ export default function PosApp() {
                 className={[
                   "min-h-16 rounded-2xl border text-lg font-bold",
                   payMethod === "card"
-                    ? "border-amber-400/70 bg-amber-400/10 text-white"
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
                     : "border-zinc-800 bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
@@ -785,7 +798,7 @@ export default function PosApp() {
                 className={[
                   "min-h-16 rounded-2xl border text-lg font-bold",
                   payMethod === "cash"
-                    ? "border-amber-400/70 bg-amber-400/10 text-white"
+                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
                     : "border-zinc-800 bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
@@ -800,7 +813,7 @@ export default function PosApp() {
                 </label>
                 <input
                   inputMode="decimal"
-                  className="h-16 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-2xl font-semibold text-white outline-none focus:border-amber-400/60"
+                  className="h-16 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-2xl font-semibold text-white outline-none focus:border-[#00955e]/70"
                   value={givenRaw}
                   onChange={(e) => setGivenRaw(e.target.value)}
                   placeholder="0.00"
@@ -841,7 +854,7 @@ export default function PosApp() {
               </button>
               <button
                 type="button"
-                className="min-h-14 rounded-2xl bg-amber-400 font-bold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 disabled={
                   payMethod === "cash" &&
                   (givenPence === null || givenPence < amountDuePence)

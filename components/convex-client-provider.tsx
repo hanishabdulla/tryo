@@ -16,15 +16,15 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
         <h1 className="text-2xl font-semibold tracking-tight">Tryo POS</h1>
         <p className="mt-4 max-w-lg text-zinc-400">
           Add{" "}
-          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-amber-200">
+          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-[#00955e]">
             NEXT_PUBLIC_CONVEX_URL
           </code>{" "}
           to{" "}
-          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-amber-200">
+          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-[#00955e]">
             .env.local
           </code>
           . Run{" "}
-          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-amber-200">
+          <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-[#00955e]">
             npx convex dev
           </code>{" "}
           to create a deployment and sync environment variables.
