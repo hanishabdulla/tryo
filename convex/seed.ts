@@ -47,7 +47,7 @@ type SeedItem = { name: string; basePrice: number; sortOrder: number };
 /** Moved from Light Bites — keep in sync with `MENU_ITEMS_BY_CATEGORY.Fries`. */
 const FRIES_MENU_ITEMS: SeedItem[] = [
   { name: "Loaded Fries", basePrice: 599, sortOrder: 10 },
-  { name: "Regular Fries", basePrice: 249, sortOrder: 20 },
+  { name: "Regular Fries", basePrice: 299, sortOrder: 20 },
 ];
 
 const MENU_ITEMS_BY_CATEGORY: Record<string, SeedItem[]> = {
@@ -86,6 +86,20 @@ const MENU_ITEMS_BY_CATEGORY: Record<string, SeedItem[]> = {
   ],
   Rice: [{ name: "Mexican Rice Bowl", basePrice: 799, sortOrder: 10 }],
   Fries: FRIES_MENU_ITEMS,
+  "Add-ons": [
+    { name: "Jalapeno", basePrice: 50, sortOrder: 10 },
+    { name: "Gherkins", basePrice: 50, sortOrder: 20 },
+    { name: "Mild Peppers", basePrice: 50, sortOrder: 30 },
+    { name: "Sweetcorn", basePrice: 50, sortOrder: 40 },
+    { name: "Mushroom", basePrice: 129, sortOrder: 50 },
+    { name: "Cheese", basePrice: 129, sortOrder: 60 },
+    { name: "Fried Egg", basePrice: 129, sortOrder: 70 },
+    { name: "Turkey Sausage", basePrice: 299, sortOrder: 80 },
+    { name: "Turkey Rashers", basePrice: 299, sortOrder: 90 },
+    { name: "Chicken", basePrice: 299, sortOrder: 100 },
+    { name: "Falafel", basePrice: 299, sortOrder: 110 },
+    { name: "Beef", basePrice: 299, sortOrder: 120 },
+  ],
   "Light Bites": [
     { name: "Hot Dog", basePrice: 399, sortOrder: 10 },
     { name: "Chilli Cheese Nuggets", basePrice: 299, sortOrder: 20 },

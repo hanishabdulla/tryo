@@ -15,6 +15,7 @@ export const CATEGORIES: CategoryDef[] = [
   { id: "wraps", label: "Wraps", convexCategory: "Wraps" },
   { id: "rice", label: "Rice", convexCategory: "Rice" },
   { id: "fries", label: "Fries", convexCategory: "Fries" },
+  { id: "add_ons", label: "Add-ons", convexCategory: "Add-ons" },
   { id: "light_bites", label: "Light Bites", convexCategory: "Light Bites" },
   { id: "hot_soups", label: "Hot Soups", convexCategory: "Hot Soups" },
   { id: "drinks", label: "Drinks", convexCategory: "Drinks" },
