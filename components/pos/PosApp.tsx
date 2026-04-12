@@ -9,6 +9,14 @@ import {
   parsePercentDiscountInput,
 } from "@/lib/discount";
 import {
+  HOT_DOG_CHEESE_PRICE_PENCE,
+  HOT_DOG_ONION_OPTIONS,
+  HOT_DOG_ONION_PRICE_PENCE,
+  hotDogCartLineKey,
+  hotDogExtrasPence,
+  isHotDogSheet,
+} from "@/lib/hot-dog";
+import {
   isLoadedFriesSheet,
   loadedFriesCartLineKey,
 } from "@/lib/loaded-fries";
@@ -47,6 +55,9 @@ type CartLine = {
   loadedFriesAddonUnitPence?: number;
   /** Loaded Fries — free sauce choice */
   sauce?: string | null;
+  /** Hot Dog — mutually exclusive onion choice ("None" = no onion topping) */
+  hotDogOnion?: string | null;
+  hotDogCheese?: boolean;
 };
 
 function lineKey(itemName: string, isMeal: boolean) {
@@ -198,6 +209,8 @@ export default function PosApp() {
   const [lfSeasoning, setLfSeasoning] = useState("None");
   const [lfSauce, setLfSauce] = useState("None");
   const [lfAddons, setLfAddons] = useState<string[]>([]);
+  const [hdOnion, setHdOnion] = useState("None");
+  const [hdCheese, setHdCheese] = useState(false);
 
   const [customItemOpen, setCustomItemOpen] = useState(false);
   const [customItemName, setCustomItemName] = useState("");
@@ -263,6 +276,10 @@ export default function PosApp() {
         setLfSauce("None");
         setLfAddons([]);
       }
+      if (isHotDogSheet(item, activeCategory.convexCategory)) {
+        setHdOnion("None");
+        setHdCheese(false);
+      }
     },
     [activeCategory.convexCategory],
   );
@@ -293,6 +310,40 @@ export default function PosApp() {
               sauce: lfSauce,
               addons: [...lfAddons],
               loadedFriesAddonUnitPence: addonUnit,
+            },
+          ];
+        }
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          quantity: next[idx].quantity + sheetQty,
+        };
+        return next;
+      });
+      setSheetItem(null);
+      return;
+    }
+    if (isHotDogSheet(sheetItem, activeCategory.convexCategory)) {
+      const extras = hotDogExtrasPence(hdOnion, hdCheese);
+      const unit = sheetItem.basePrice + extras;
+      const key = hotDogCartLineKey(hdOnion, hdCheese);
+      setCart((prev) => {
+        const idx = prev.findIndex((l) => l.lineKey === key);
+        if (idx === -1) {
+          return [
+            ...prev,
+            {
+              lineKey: key,
+              itemName: sheetItem.name,
+              sourceCategory: activeCategory.convexCategory ?? "",
+              isMeal: false,
+              mealLabel: null,
+              basePricePence: sheetItem.basePrice,
+              mealUpchargePence: extras,
+              unitPricePence: unit,
+              quantity: sheetQty,
+              hotDogOnion: hdOnion,
+              hotDogCheese: hdCheese,
             },
           ];
         }
@@ -340,6 +391,8 @@ export default function PosApp() {
   }, [
     activeCategory.convexCategory,
     activeMealComboLabel,
+    hdCheese,
+    hdOnion,
     lfAddons,
     lfSauce,
     lfSeasoning,
@@ -459,6 +512,13 @@ export default function PosApp() {
           addons: l.addons ?? [],
         };
       }
+      if (l.itemName === "Hot Dog") {
+        return {
+          ...row,
+          hotDogOnion: l.hotDogOnion ?? "None",
+          hotDogCheese: l.hotDogCheese ?? false,
+        };
+      }
       return row;
     });
 
@@ -489,6 +549,31 @@ export default function PosApp() {
             name,
             lineTotalPence: addonUnit * l.quantity,
           })),
+        };
+      }
+      if (l.itemName === "Hot Dog") {
+        const onion = l.hotDogOnion ?? "None";
+        const addonLines: { name: string; lineTotalPence: number }[] = [];
+        if (onion !== "None") {
+          addonLines.push({
+            name: onion,
+            lineTotalPence: HOT_DOG_ONION_PRICE_PENCE * l.quantity,
+          });
+        }
+        if (l.hotDogCheese) {
+          addonLines.push({
+            name: "Cheese",
+            lineTotalPence: HOT_DOG_CHEESE_PRICE_PENCE * l.quantity,
+          });
+        }
+        return {
+          name: l.itemName,
+          quantity: l.quantity,
+          baseLineTotalPence: l.basePricePence * l.quantity,
+          isMeal: false,
+          mealLabel: null,
+          mealLineTotalPence: 0,
+          addonLines: addonLines.length > 0 ? addonLines : undefined,
         };
       }
       return {
@@ -695,6 +780,35 @@ export default function PosApp() {
                                 <div className="text-zinc-500">No add-ons</div>
                               )}
                             </div>
+                          ) : line.itemName === "Hot Dog" ? (
+                            <div className="space-y-0.5">
+                              <div>
+                                Onions:{" "}
+                                <span className="text-zinc-300">
+                                  {(line.hotDogOnion ?? "None") === "None"
+                                    ? "None"
+                                    : line.hotDogOnion}
+                                </span>
+                                {(line.hotDogOnion ?? "None") !== "None" ? (
+                                  <span className="text-zinc-500">
+                                    {" "}
+                                    (+{formatPence(HOT_DOG_ONION_PRICE_PENCE)})
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div>
+                                Cheese:{" "}
+                                <span className="text-zinc-300">
+                                  {line.hotDogCheese ? "Yes" : "No"}
+                                </span>
+                                {line.hotDogCheese ? (
+                                  <span className="text-zinc-500">
+                                    {" "}
+                                    (+{formatPence(HOT_DOG_CHEESE_PRICE_PENCE)})
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
                           ) : line.isMeal ? (
                             <span>
                               Meal ·{" "}
@@ -820,6 +934,21 @@ export default function PosApp() {
                       each
                     </p>
                   </div>
+                ) : isHotDogSheet(sheetItem, activeCategory.convexCategory) ? (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-sm text-zinc-400">
+                      Base {formatPence(sheetItem.basePrice)} · Onions{" "}
+                      {formatPence(HOT_DOG_ONION_PRICE_PENCE)} (one choice) ·
+                      Cheese {formatPence(HOT_DOG_CHEESE_PRICE_PENCE)}
+                    </p>
+                    <p className="text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
+                      {formatPence(
+                        sheetItem.basePrice +
+                          hotDogExtrasPence(hdOnion, hdCheese),
+                      )}{" "}
+                      each
+                    </p>
+                  </div>
                 ) : (
                   <p className="mt-1 text-sm text-zinc-400">
                     {mealEligible ? "Base " : "Price "}
@@ -913,6 +1042,65 @@ export default function PosApp() {
                       );
                     })}
                   </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isHotDogSheet(sheetItem, activeCategory.convexCategory) ? (
+              <div className="mt-5 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                    Onions (choose one)
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Caramelized or crispy — not both. None is free.
+                  </p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {HOT_DOG_ONION_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setHdOnion(opt)}
+                        className={[
+                          "flex min-h-14 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold",
+                          hdOnion === opt
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        <span>{opt}</span>
+                        {opt === "None" ? (
+                          <span className="text-xs font-normal text-zinc-500">
+                            —
+                          </span>
+                        ) : (
+                          <span className="text-xs font-normal text-[#00955e]">
+                            +{formatPence(HOT_DOG_ONION_PRICE_PENCE)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                    Cheese
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setHdCheese((c) => !c)}
+                    className={[
+                      "mt-2 flex min-h-14 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold",
+                      hdCheese
+                        ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    ].join(" ")}
+                  >
+                    <span>Add cheese</span>
+                    <span className="text-xs font-normal text-[#00955e]">
+                      +{formatPence(HOT_DOG_CHEESE_PRICE_PENCE)}
+                    </span>
+                  </button>
                 </div>
               </div>
             ) : null}

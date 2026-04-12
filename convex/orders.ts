@@ -11,6 +11,8 @@ const orderLine = v.object({
   seasoning: v.optional(v.union(v.string(), v.null())),
   sauce: v.optional(v.union(v.string(), v.null())),
   addons: v.optional(v.array(v.string())),
+  hotDogOnion: v.optional(v.union(v.string(), v.null())),
+  hotDogCheese: v.optional(v.boolean()),
 });
 
 const discountMode = v.union(
