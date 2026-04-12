@@ -5,6 +5,21 @@ const CONFIG_ENTRIES: Array<{ key: string; value: unknown }> = [
   { key: "mealUpcharge", value: 249 },
   { key: "mealComboLabel", value: "Fries + Coke" },
   { key: "mealComboLabelWraps", value: "Fries + Drink" },
+  {
+    key: "loadedFriesSeasonings",
+    value: ["Cajun", "Peri-Peri", "None"],
+  },
+  {
+    key: "loadedFriesAddons",
+    value: [
+      "Spicy Chicken",
+      "Southern Fried Chicken",
+      "Angus Beef",
+      "Beef",
+      "Falafel",
+    ],
+  },
+  { key: "loadedFriesAddonPricePence", value: 299 },
   { key: "businessName", value: "Tryo" },
   {
     key: "businessAddress",

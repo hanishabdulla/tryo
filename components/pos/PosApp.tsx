@@ -8,6 +8,10 @@ import {
   computePaymentDiscountPence,
   parsePercentDiscountInput,
 } from "@/lib/discount";
+import {
+  isLoadedFriesSheet,
+  loadedFriesCartLineKey,
+} from "@/lib/loaded-fries";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 import {
   ReceiptStage,
@@ -37,6 +41,10 @@ type CartLine = {
   mealUpchargePence: number;
   unitPricePence: number;
   quantity: number;
+  /** Loaded Fries only */
+  seasoning?: string | null;
+  addons?: string[];
+  loadedFriesAddonUnitPence?: number;
 };
 
 function lineKey(itemName: string, isMeal: boolean) {
@@ -127,11 +135,40 @@ export default function PosApp() {
       ? config.receiptQrUrl
       : "https://www.tryoeats.uk/";
 
+  const loadedFriesAddonPricePence = useMemo(() => {
+    const v = config?.loadedFriesAddonPricePence;
+    return typeof v === "number" && Number.isFinite(v) ? v : 299;
+  }, [config]);
+
+  const loadedFriesSeasonings = useMemo((): string[] => {
+    const v = config?.loadedFriesSeasonings;
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+      return v as string[];
+    }
+    return ["Cajun", "Peri-Peri", "None"];
+  }, [config]);
+
+  const loadedFriesAddonsList = useMemo((): string[] => {
+    const v = config?.loadedFriesAddons;
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+      return v as string[];
+    }
+    return [
+      "Spicy Chicken",
+      "Southern Fried Chicken",
+      "Angus Beef",
+      "Beef",
+      "Falafel",
+    ];
+  }, [config]);
+
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [sheetItem, setSheetItem] = useState<MenuRow | null>(null);
   const [sheetMeal, setSheetMeal] = useState(false);
   const [sheetQty, setSheetQty] = useState(1);
+  const [lfSeasoning, setLfSeasoning] = useState("None");
+  const [lfAddons, setLfAddons] = useState<string[]>([]);
 
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
@@ -188,12 +225,52 @@ export default function PosApp() {
       setSheetItem(item);
       setSheetMeal(false);
       setSheetQty(1);
+      if (isLoadedFriesSheet(item, activeCategory.convexCategory)) {
+        setLfSeasoning("None");
+        setLfAddons([]);
+      }
     },
-    [],
+    [activeCategory.convexCategory],
   );
 
   const addFromSheet = useCallback(() => {
     if (!sheetItem) return;
+    if (isLoadedFriesSheet(sheetItem, activeCategory.convexCategory)) {
+      const addonUnit = loadedFriesAddonPricePence;
+      const n = lfAddons.length;
+      const unit = sheetItem.basePrice + n * addonUnit;
+      const key = loadedFriesCartLineKey(lfSeasoning, lfAddons);
+      setCart((prev) => {
+        const idx = prev.findIndex((l) => l.lineKey === key);
+        if (idx === -1) {
+          return [
+            ...prev,
+            {
+              lineKey: key,
+              itemName: sheetItem.name,
+              sourceCategory: activeCategory.convexCategory ?? "",
+              isMeal: false,
+              mealLabel: null,
+              basePricePence: sheetItem.basePrice,
+              mealUpchargePence: n * addonUnit,
+              unitPricePence: unit,
+              quantity: sheetQty,
+              seasoning: lfSeasoning,
+              addons: [...lfAddons],
+              loadedFriesAddonUnitPence: addonUnit,
+            },
+          ];
+        }
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          quantity: next[idx].quantity + sheetQty,
+        };
+        return next;
+      });
+      setSheetItem(null);
+      return;
+    }
     const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
     const unit = sheetItem.basePrice + up;
@@ -228,6 +305,9 @@ export default function PosApp() {
   }, [
     activeCategory.convexCategory,
     activeMealComboLabel,
+    lfAddons,
+    lfSeasoning,
+    loadedFriesAddonPricePence,
     mealEligible,
     mealUpchargePence,
     sheetItem,
@@ -285,14 +365,24 @@ export default function PosApp() {
       }
     }
 
-    const items = cart.map((l) => ({
-      itemName: l.itemName,
-      isMeal: l.isMeal,
-      mealLabel: l.mealLabel,
-      unitPrice: l.unitPricePence,
-      quantity: l.quantity,
-      lineTotal: l.unitPricePence * l.quantity,
-    }));
+    const items = cart.map((l) => {
+      const row = {
+        itemName: l.itemName,
+        isMeal: l.isMeal,
+        mealLabel: l.mealLabel,
+        unitPrice: l.unitPricePence,
+        quantity: l.quantity,
+        lineTotal: l.unitPricePence * l.quantity,
+      };
+      if (l.itemName === "Loaded Fries") {
+        return {
+          ...row,
+          seasoning: l.seasoning ?? "None",
+          addons: l.addons ?? [],
+        };
+      }
+      return row;
+    });
 
     const res = await submitOrder({
       items,
@@ -304,14 +394,33 @@ export default function PosApp() {
       discountInput: serverDiscountInput,
     });
 
-    const lines: ReceiptLinePrint[] = cart.map((l) => ({
-      name: l.itemName,
-      quantity: l.quantity,
-      baseLineTotalPence: l.basePricePence * l.quantity,
-      isMeal: l.isMeal,
-      mealLabel: l.mealLabel,
-      mealLineTotalPence: l.isMeal ? l.mealUpchargePence * l.quantity : 0,
-    }));
+    const lines: ReceiptLinePrint[] = cart.map((l) => {
+      if (l.itemName === "Loaded Fries") {
+        const addonUnit =
+          l.loadedFriesAddonUnitPence ?? loadedFriesAddonPricePence;
+        return {
+          name: l.itemName,
+          quantity: l.quantity,
+          baseLineTotalPence: l.basePricePence * l.quantity,
+          isMeal: false,
+          mealLabel: null,
+          mealLineTotalPence: 0,
+          seasoning: l.seasoning ?? "None",
+          addonLines: (l.addons ?? []).map((name) => ({
+            name,
+            lineTotalPence: addonUnit * l.quantity,
+          })),
+        };
+      }
+      return {
+        name: l.itemName,
+        quantity: l.quantity,
+        baseLineTotalPence: l.basePricePence * l.quantity,
+        isMeal: l.isMeal,
+        mealLabel: l.mealLabel,
+        mealLineTotalPence: l.isMeal ? l.mealUpchargePence * l.quantity : 0,
+      };
+    });
 
     setReceipt({
       orderNumber: res.orderNumber,
@@ -352,6 +461,7 @@ export default function PosApp() {
     discountKind,
     discountRaw,
     givenPence,
+    loadedFriesAddonPricePence,
     payMethod,
     qrUrl,
     submitOrder,
@@ -467,7 +577,26 @@ export default function PosApp() {
                           {line.itemName}
                         </div>
                         <div className="mt-1 text-sm text-zinc-400">
-                          {line.isMeal ? (
+                          {line.itemName === "Loaded Fries" ? (
+                            <div className="space-y-0.5">
+                              <div>
+                                Seasoning:{" "}
+                                <span className="text-zinc-300">
+                                  {line.seasoning ?? "None"}
+                                </span>
+                              </div>
+                              {line.addons && line.addons.length > 0 ? (
+                                <div>
+                                  Add-ons:{" "}
+                                  <span className="text-zinc-300">
+                                    {line.addons.join(", ")}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-zinc-500">No add-ons</div>
+                              )}
+                            </div>
+                          ) : line.isMeal ? (
                             <span>
                               Meal ·{" "}
                               <span className="text-zinc-300">
@@ -577,10 +706,27 @@ export default function PosApp() {
                 >
                   {sheetItem.name}
                 </h2>
-                <p className="mt-1 text-sm text-zinc-400">
-                  {mealEligible ? "Base " : "Price "}
-                  {formatPence(sheetItem.basePrice)}
-                </p>
+                {isLoadedFriesSheet(sheetItem, activeCategory.convexCategory) ? (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-sm text-zinc-400">
+                      Base {formatPence(sheetItem.basePrice)} · Add-on{" "}
+                      {formatPence(loadedFriesAddonPricePence)} each · Seasoning
+                      free
+                    </p>
+                    <p className="text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
+                      {formatPence(
+                        sheetItem.basePrice +
+                          lfAddons.length * loadedFriesAddonPricePence,
+                      )}{" "}
+                      each
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {mealEligible ? "Base " : "Price "}
+                    {formatPence(sheetItem.basePrice)}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -591,6 +737,64 @@ export default function PosApp() {
                 ×
               </button>
             </div>
+
+            {isLoadedFriesSheet(sheetItem, activeCategory.convexCategory) ? (
+              <div className="mt-5 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                    Seasoning
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {loadedFriesSeasonings.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setLfSeasoning(s)}
+                        className={[
+                          "min-h-14 min-w-[4.5rem] rounded-2xl border px-4 text-sm font-bold",
+                          lfSeasoning === s
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                    Add-ons (+{formatPence(loadedFriesAddonPricePence)} each)
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {loadedFriesAddonsList.map((a) => {
+                      const on = lfAddons.includes(a);
+                      return (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() =>
+                            setLfAddons((prev) =>
+                              on
+                                ? prev.filter((x) => x !== a)
+                                : [...prev, a],
+                            )
+                          }
+                          className={[
+                            "min-h-14 rounded-2xl border px-4 text-left text-sm font-semibold",
+                            on
+                              ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                              : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                          ].join(" ")}
+                        >
+                          {a}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {mealEligible ? (
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">

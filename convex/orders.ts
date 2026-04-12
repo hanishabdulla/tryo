@@ -8,6 +8,8 @@ const orderLine = v.object({
   unitPrice: v.number(),
   quantity: v.number(),
   lineTotal: v.number(),
+  seasoning: v.optional(v.union(v.string(), v.null())),
+  addons: v.optional(v.array(v.string())),
 });
 
 const discountMode = v.union(

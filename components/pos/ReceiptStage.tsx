@@ -3,6 +3,11 @@
 import { QRCodeSVG } from "qrcode.react";
 import { formatPence } from "@/lib/money";
 
+export type ReceiptAddonLine = {
+  name: string;
+  lineTotalPence: number;
+};
+
 export type ReceiptLinePrint = {
   name: string;
   quantity: number;
@@ -10,6 +15,10 @@ export type ReceiptLinePrint = {
   isMeal: boolean;
   mealLabel: string | null;
   mealLineTotalPence: number;
+  /** Loaded Fries — printed under main line, no charge */
+  seasoning?: string | null;
+  /** Loaded Fries — each row shows qty × add-on and line total */
+  addonLines?: ReceiptAddonLine[];
 };
 
 export type ReceiptPayload = {
@@ -62,6 +71,11 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
               </span>
               <span className="shrink-0">{formatPence(line.baseLineTotalPence)}</span>
             </div>
+            {line.seasoning !== undefined && line.seasoning !== null ? (
+              <div className="mt-0.5 pl-1 text-[10px] text-black">
+                Seasoning: {line.seasoning}
+              </div>
+            ) : null}
             {line.isMeal && line.mealLabel ? (
               <div className="mt-0.5 flex justify-between gap-2 pl-3 text-[10px]">
                 <span className="min-w-0 flex-1">
@@ -72,6 +86,21 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
                 </span>
               </div>
             ) : null}
+            {line.addonLines && line.addonLines.length > 0
+              ? line.addonLines.map((ad) => (
+                  <div
+                    key={ad.name}
+                    className="mt-0.5 flex justify-between gap-2 pl-3 text-[10px]"
+                  >
+                    <span className="min-w-0 flex-1 uppercase">
+                      {line.quantity} x {ad.name}:
+                    </span>
+                    <span className="shrink-0">
+                      {formatPence(ad.lineTotalPence)}
+                    </span>
+                  </div>
+                ))
+              : null}
           </div>
         ))}
         <div className="my-2 border-t border-dashed border-black" />
