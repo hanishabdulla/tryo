@@ -45,6 +45,8 @@ type CartLine = {
   seasoning?: string | null;
   addons?: string[];
   loadedFriesAddonUnitPence?: number;
+  /** Loaded Fries — free sauce choice */
+  sauce?: string | null;
 };
 
 function lineKey(itemName: string, isMeal: boolean) {
@@ -172,12 +174,29 @@ export default function PosApp() {
     ];
   }, [config]);
 
+  const loadedFriesSauces = useMemo((): string[] => {
+    const v = config?.loadedFriesSauces;
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+      return v as string[];
+    }
+    return [
+      "None",
+      "Mayo",
+      "Burger sauce",
+      "Ketchup",
+      "Barbecue",
+      "Chipotle",
+      "Garlic mayo",
+    ];
+  }, [config]);
+
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [sheetItem, setSheetItem] = useState<MenuRow | null>(null);
   const [sheetMeal, setSheetMeal] = useState(false);
   const [sheetQty, setSheetQty] = useState(1);
   const [lfSeasoning, setLfSeasoning] = useState("None");
+  const [lfSauce, setLfSauce] = useState("None");
   const [lfAddons, setLfAddons] = useState<string[]>([]);
 
   const [customItemOpen, setCustomItemOpen] = useState(false);
@@ -241,6 +260,7 @@ export default function PosApp() {
       setSheetQty(1);
       if (isLoadedFriesSheet(item, activeCategory.convexCategory)) {
         setLfSeasoning("None");
+        setLfSauce("None");
         setLfAddons([]);
       }
     },
@@ -253,7 +273,7 @@ export default function PosApp() {
       const addonUnit = loadedFriesAddonPricePence;
       const n = lfAddons.length;
       const unit = sheetItem.basePrice + n * addonUnit;
-      const key = loadedFriesCartLineKey(lfSeasoning, lfAddons);
+      const key = loadedFriesCartLineKey(lfSeasoning, lfSauce, lfAddons);
       setCart((prev) => {
         const idx = prev.findIndex((l) => l.lineKey === key);
         if (idx === -1) {
@@ -270,6 +290,7 @@ export default function PosApp() {
               unitPricePence: unit,
               quantity: sheetQty,
               seasoning: lfSeasoning,
+              sauce: lfSauce,
               addons: [...lfAddons],
               loadedFriesAddonUnitPence: addonUnit,
             },
@@ -320,6 +341,7 @@ export default function PosApp() {
     activeCategory.convexCategory,
     activeMealComboLabel,
     lfAddons,
+    lfSauce,
     lfSeasoning,
     loadedFriesAddonPricePence,
     mealEligible,
@@ -433,6 +455,7 @@ export default function PosApp() {
         return {
           ...row,
           seasoning: l.seasoning ?? "None",
+          sauce: l.sauce ?? "None",
           addons: l.addons ?? [],
         };
       }
@@ -461,6 +484,7 @@ export default function PosApp() {
           mealLabel: null,
           mealLineTotalPence: 0,
           seasoning: l.seasoning ?? "None",
+          sauce: l.sauce ?? "None",
           addonLines: (l.addons ?? []).map((name) => ({
             name,
             lineTotalPence: addonUnit * l.quantity,
@@ -654,6 +678,12 @@ export default function PosApp() {
                                   {line.seasoning ?? "None"}
                                 </span>
                               </div>
+                              <div>
+                                Sauce:{" "}
+                                <span className="text-zinc-300">
+                                  {line.sauce ?? "None"}
+                                </span>
+                              </div>
                               {line.addons && line.addons.length > 0 ? (
                                 <div>
                                   Add-ons:{" "}
@@ -779,8 +809,8 @@ export default function PosApp() {
                   <div className="mt-1 space-y-1">
                     <p className="text-sm text-zinc-400">
                       Base {formatPence(sheetItem.basePrice)} · Add-on{" "}
-                      {formatPence(loadedFriesAddonPricePence)} each · Seasoning
-                      free
+                      {formatPence(loadedFriesAddonPricePence)} each · No charge
+                      for seasoning or sauce
                     </p>
                     <p className="text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
                       {formatPence(
@@ -822,6 +852,28 @@ export default function PosApp() {
                         className={[
                           "min-h-14 min-w-[4.5rem] rounded-2xl border px-4 text-sm font-bold",
                           lfSeasoning === s
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                    Sauce
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {loadedFriesSauces.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setLfSauce(s)}
+                        className={[
+                          "min-h-14 min-w-[4.5rem] rounded-2xl border px-4 text-sm font-bold",
+                          lfSauce === s
                             ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
                             : "border-zinc-800 bg-zinc-950 text-zinc-300",
                         ].join(" ")}

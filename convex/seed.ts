@@ -19,6 +19,18 @@ const CONFIG_ENTRIES: Array<{ key: string; value: unknown }> = [
       "Falafel",
     ],
   },
+  {
+    key: "loadedFriesSauces",
+    value: [
+      "None",
+      "Mayo",
+      "Burger sauce",
+      "Ketchup",
+      "Barbecue",
+      "Chipotle",
+      "Garlic mayo",
+    ],
+  },
   { key: "loadedFriesAddonPricePence", value: 299 },
   { key: "businessName", value: "Tryo" },
   {

@@ -9,6 +9,7 @@ const orderLine = v.object({
   quantity: v.number(),
   lineTotal: v.number(),
   seasoning: v.optional(v.union(v.string(), v.null())),
+  sauce: v.optional(v.union(v.string(), v.null())),
   addons: v.optional(v.array(v.string())),
 });
 

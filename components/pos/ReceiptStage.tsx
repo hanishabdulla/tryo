@@ -17,6 +17,8 @@ export type ReceiptLinePrint = {
   mealLineTotalPence: number;
   /** Loaded Fries — printed under main line, no charge */
   seasoning?: string | null;
+  /** Loaded Fries — free sauce choice */
+  sauce?: string | null;
   /** Loaded Fries — each row shows qty × add-on and line total */
   addonLines?: ReceiptAddonLine[];
 };
@@ -74,6 +76,11 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
             {line.seasoning !== undefined && line.seasoning !== null ? (
               <div className="mt-0.5 pl-1 text-[10px] text-black">
                 Seasoning: {line.seasoning}
+              </div>
+            ) : null}
+            {line.sauce !== undefined && line.sauce !== null ? (
+              <div className="mt-0.5 pl-1 text-[10px] text-black">
+                Sauce: {line.sauce}
               </div>
             ) : null}
             {line.isMeal && line.mealLabel ? (

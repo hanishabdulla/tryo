@@ -12,7 +12,8 @@ export function isLoadedFriesSheet(
 
 export function loadedFriesCartLineKey(
   seasoning: string,
+  sauce: string,
   addons: string[],
 ): string {
-  return `LF::${seasoning}::${[...addons].sort().join("|")}`;
+  return `LF::${seasoning}::${sauce}::${[...addons].sort().join("|")}`;
 }
