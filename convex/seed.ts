@@ -44,6 +44,12 @@ const CONFIG_ENTRIES: Array<{ key: string; value: unknown }> = [
 
 type SeedItem = { name: string; basePrice: number; sortOrder: number };
 
+/** Moved from Light Bites — keep in sync with `MENU_ITEMS_BY_CATEGORY.Fries`. */
+const FRIES_MENU_ITEMS: SeedItem[] = [
+  { name: "Loaded Fries", basePrice: 599, sortOrder: 10 },
+  { name: "Regular Fries", basePrice: 249, sortOrder: 20 },
+];
+
 const MENU_ITEMS_BY_CATEGORY: Record<string, SeedItem[]> = {
   "All Day Breakfast": [
     { name: "Baguette with Fried Egg", basePrice: 299, sortOrder: 10 },
@@ -79,12 +85,11 @@ const MENU_ITEMS_BY_CATEGORY: Record<string, SeedItem[]> = {
     { name: "Spicy Chicken Wrap", basePrice: 699, sortOrder: 40 },
   ],
   Rice: [{ name: "Mexican Rice Bowl", basePrice: 799, sortOrder: 10 }],
+  Fries: FRIES_MENU_ITEMS,
   "Light Bites": [
     { name: "Hot Dog", basePrice: 399, sortOrder: 10 },
-    { name: "Loaded Fries", basePrice: 599, sortOrder: 20 },
-    { name: "Regular Fries", basePrice: 249, sortOrder: 30 },
-    { name: "Chilli Cheese Nuggets", basePrice: 299, sortOrder: 40 },
-    { name: "Maska Bun", basePrice: 299, sortOrder: 50 },
+    { name: "Chilli Cheese Nuggets", basePrice: 299, sortOrder: 20 },
+    { name: "Maska Bun", basePrice: 299, sortOrder: 30 },
   ],
   "Hot Soups": [
     { name: "Chicken Soup", basePrice: 399, sortOrder: 10 },
@@ -120,6 +125,20 @@ export const seed = mutationGeneric({
       } else {
         await ctx.db.insert("menuConfig", { key, value });
       }
+    }
+
+    const friesNames = new Set(FRIES_MENU_ITEMS.map((i) => i.name));
+    const allMenuRows = await ctx.db.query("menuItems").collect();
+    for (const doc of allMenuRows) {
+      if (!friesNames.has(doc.name)) continue;
+      const def = FRIES_MENU_ITEMS.find((i) => i.name === doc.name);
+      if (!def) continue;
+      await ctx.db.patch(doc._id, {
+        category: "Fries",
+        basePrice: def.basePrice,
+        sortOrder: def.sortOrder,
+        available: true,
+      });
     }
 
     for (const [category, items] of Object.entries(MENU_ITEMS_BY_CATEGORY)) {

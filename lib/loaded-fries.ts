@@ -6,7 +6,7 @@ export function isLoadedFriesSheet(
   return (
     item != null &&
     item.name === "Loaded Fries" &&
-    categoryConvex === "Light Bites"
+    (categoryConvex === "Fries" || categoryConvex === "Light Bites")
   );
 }
 
