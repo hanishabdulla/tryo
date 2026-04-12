@@ -17,6 +17,8 @@ export type ReceiptPayload = {
   createdAt: number;
   lines: ReceiptLinePrint[];
   subtotalPence: number;
+  discountLabel: string | null;
+  discountAmountPence: number;
   deliveryFeePence: number;
   totalPence: number;
   totalItemCount: number;
@@ -77,6 +79,14 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
           <span>Sub Total:</span>
           <span>{formatPence(data.subtotalPence)}</span>
         </div>
+        {data.discountAmountPence > 0 && data.discountLabel ? (
+          <div className="flex justify-between gap-2">
+            <span className="min-w-0 pr-2">{data.discountLabel}</span>
+            <span className="shrink-0">
+              {formatPence(-data.discountAmountPence)}
+            </span>
+          </div>
+        ) : null}
         <div className="flex justify-between gap-2">
           <span>Delivery Fee:</span>
           <span>£0.00</span>

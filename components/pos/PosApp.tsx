@@ -4,6 +4,10 @@ import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/convex-api";
 import { CATEGORIES, type CategoryDef } from "@/lib/categories";
+import {
+  computePaymentDiscountPence,
+  parsePercentDiscountInput,
+} from "@/lib/discount";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 import {
   ReceiptStage,
@@ -26,6 +30,7 @@ type MenuItemDoc = {
 type CartLine = {
   lineKey: string;
   itemName: string;
+  sourceCategory: string;
   isMeal: boolean;
   mealLabel: string | null;
   basePricePence: number;
@@ -38,11 +43,22 @@ function lineKey(itemName: string, isMeal: boolean) {
   return `${itemName}::${isMeal ? "meal" : "ind"}`;
 }
 
+function receiptDiscountLabel(
+  mode: "none" | "percentage" | "fixed",
+  input: number,
+  amountPence: number,
+): string | null {
+  if (amountPence <= 0) return null;
+  if (mode === "percentage") return `Discount (${input}%):`;
+  if (mode === "fixed") return `Discount (${formatPence(input)}):`;
+  return "Discount:";
+}
+
 function useMenuConfigMap() {
   return useQuery(api.menu.getMenuConfig, {});
 }
 
-function useBurgerItems(activeCategory: CategoryDef | null) {
+function useCategoryMenuItems(activeCategory: CategoryDef | null) {
   const category = activeCategory?.convexCategory;
   return useQuery(
     api.menu.listItemsByCategory,
@@ -58,7 +74,9 @@ export default function PosApp() {
     CATEGORIES.find((c) => c.id === activeCategoryId) ?? CATEGORIES[0];
 
   const config = useMenuConfigMap();
-  const burgerItems = useBurgerItems(activeCategory);
+  const categoryMenuItems = useCategoryMenuItems(activeCategory);
+
+  const mealEligible = activeCategory.convexCategory === "Burgers";
 
   const seedDb = useMutation(api.seed.seed);
   const submitOrder = useMutation(api.orders.submitOrder);
@@ -103,11 +121,13 @@ export default function PosApp() {
   const [sheetMeal, setSheetMeal] = useState(false);
   const [sheetQty, setSheetQty] = useState(1);
 
-  const [comingSoonLabel, setComingSoonLabel] = useState<string | null>(null);
-
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
   const [givenRaw, setGivenRaw] = useState("");
+  const [discountKind, setDiscountKind] = useState<"percentage" | "fixed">(
+    "percentage",
+  );
+  const [discountRaw, setDiscountRaw] = useState("");
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
   const printedOrderRef = useRef<number | null>(null);
@@ -119,13 +139,25 @@ export default function PosApp() {
     window.print();
   }, [receipt]);
 
-  const subtotalPence = useMemo(
+  const cartSubtotalPence = useMemo(
     () =>
       cart.reduce((acc, l) => acc + l.unitPricePence * l.quantity, 0),
     [cart],
   );
   const deliveryFeePence = 0;
-  const totalPence = subtotalPence + deliveryFeePence;
+  const discountPence = useMemo(
+    () =>
+      computePaymentDiscountPence(
+        discountKind,
+        discountRaw,
+        cartSubtotalPence,
+      ),
+    [cartSubtotalPence, discountKind, discountRaw],
+  );
+  const amountDuePence = Math.max(
+    0,
+    cartSubtotalPence - discountPence + deliveryFeePence,
+  );
   const totalItemCount = useMemo(
     () => cart.reduce((acc, l) => acc + l.quantity, 0),
     [cart],
@@ -134,10 +166,10 @@ export default function PosApp() {
   const givenPence = parsePenceFromInput(givenRaw);
   const changePence =
     payMethod === "cash" && givenPence !== null
-      ? givenPence - totalPence
+      ? givenPence - amountDuePence
       : null;
   const changeShort =
-    payMethod === "cash" && givenPence !== null && givenPence < totalPence;
+    payMethod === "cash" && givenPence !== null && givenPence < amountDuePence;
 
   const openItemSheet = useCallback(
     (item: MenuRow) => {
@@ -150,7 +182,7 @@ export default function PosApp() {
 
   const addFromSheet = useCallback(() => {
     if (!sheetItem) return;
-    const isMeal = sheetMeal;
+    const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
     const unit = sheetItem.basePrice + up;
     const label = isMeal ? mealComboLabel : null;
@@ -163,6 +195,7 @@ export default function PosApp() {
           {
             lineKey: key,
             itemName: sheetItem.name,
+            sourceCategory: activeCategory.convexCategory ?? "",
             isMeal,
             mealLabel: label,
             basePricePence: sheetItem.basePrice,
@@ -180,7 +213,15 @@ export default function PosApp() {
       return next;
     });
     setSheetItem(null);
-  }, [mealComboLabel, mealUpchargePence, sheetItem, sheetMeal, sheetQty]);
+  }, [
+    activeCategory.convexCategory,
+    mealComboLabel,
+    mealEligible,
+    mealUpchargePence,
+    sheetItem,
+    sheetMeal,
+    sheetQty,
+  ]);
 
   const bumpQty = useCallback((lineKey: string, delta: number) => {
     setCart((prev) =>
@@ -198,32 +239,38 @@ export default function PosApp() {
     setCart((prev) => prev.filter((l) => l.lineKey !== lineKey));
   }, []);
 
-  const onCategoryTap = useCallback(
-    (cat: CategoryDef) => {
-      setActiveCategoryId(cat.id);
-      if (!cat.convexCategory) {
-        setComingSoonLabel(cat.label);
-      }
-    },
-    [],
-  );
+  const onCategoryTap = useCallback((cat: CategoryDef) => {
+    setActiveCategoryId(cat.id);
+  }, []);
 
   const onTileTap = useCallback(
     (item: MenuRow) => {
-      if (!activeCategory.convexCategory) {
-        setComingSoonLabel(activeCategory.label);
-        return;
-      }
       openItemSheet(item);
     },
-    [activeCategory.convexCategory, activeCategory.label, openItemSheet],
+    [openItemSheet],
   );
 
   const submit = useCallback(async () => {
     if (cart.length === 0) return;
     if (payMethod === "cash") {
       if (givenPence === null) return;
-      if (givenPence < totalPence) return;
+      if (givenPence < amountDuePence) return;
+    }
+
+    let serverDiscountMode: "none" | "percentage" | "fixed" = "none";
+    let serverDiscountInput = 0;
+    if (discountKind === "percentage") {
+      const p = parsePercentDiscountInput(discountRaw);
+      if (p > 0) {
+        serverDiscountMode = "percentage";
+        serverDiscountInput = p;
+      }
+    } else {
+      const f = parsePenceFromInput(discountRaw) ?? 0;
+      if (f > 0) {
+        serverDiscountMode = "fixed";
+        serverDiscountInput = f;
+      }
     }
 
     const items = cart.map((l) => ({
@@ -237,16 +284,12 @@ export default function PosApp() {
 
     const res = await submitOrder({
       items,
-      subtotal: subtotalPence,
       deliveryFee: deliveryFeePence,
-      total: totalPence,
       paymentMethod: payMethod,
       givenAmount: payMethod === "cash" ? givenPence : null,
-      changeAmount:
-        payMethod === "cash" && givenPence !== null
-          ? givenPence - totalPence
-          : null,
       totalItemCount,
+      discountMode: serverDiscountMode,
+      discountInput: serverDiscountInput,
     });
 
     const lines: ReceiptLinePrint[] = cart.map((l) => ({
@@ -262,9 +305,15 @@ export default function PosApp() {
       orderNumber: res.orderNumber,
       createdAt: res.createdAt,
       lines,
-      subtotalPence,
+      subtotalPence: res.subtotal,
+      discountLabel: receiptDiscountLabel(
+        res.discountMode,
+        res.discountInput,
+        res.discountAmountPence,
+      ),
+      discountAmountPence: res.discountAmountPence,
       deliveryFeePence,
-      totalPence,
+      totalPence: res.total,
       totalItemCount,
       paymentMethod: payMethod,
       businessName,
@@ -278,31 +327,34 @@ export default function PosApp() {
     setPayOpen(false);
     setGivenRaw("");
     setPayMethod("card");
+    setDiscountKind("percentage");
+    setDiscountRaw("");
   }, [
+    amountDuePence,
     businessAddress,
     businessName,
     businessPhone,
     businessVat,
     cart,
     deliveryFeePence,
+    discountKind,
+    discountRaw,
     givenPence,
     payMethod,
     qrUrl,
-    subtotalPence,
     submitOrder,
     totalItemCount,
-    totalPence,
   ]);
 
   const itemsForGrid: MenuRow[] = useMemo(() => {
     if (!activeCategory.convexCategory) return [];
-    if (!burgerItems) return [];
-    return (burgerItems as MenuItemDoc[]).map((r) => ({
+    if (!categoryMenuItems) return [];
+    return (categoryMenuItems as MenuItemDoc[]).map((r) => ({
       _id: r._id,
       name: r.name,
       basePrice: r.basePrice,
     }));
-  }, [activeCategory.convexCategory, burgerItems]);
+  }, [activeCategory.convexCategory, categoryMenuItems]);
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-zinc-950 text-zinc-50">
@@ -344,16 +396,7 @@ export default function PosApp() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            {!activeCategory.convexCategory ? (
-              <div className="flex h-full min-h-[240px] items-center justify-center rounded-3xl border border-dashed border-zinc-800 bg-zinc-900/40 p-6 text-center text-zinc-400">
-                <p className="max-w-sm text-base">
-                  <span className="font-semibold text-zinc-200">
-                    {activeCategory.label}
-                  </span>{" "}
-                  is coming soon. Switch to Burgers to take orders.
-                </p>
-              </div>
-            ) : burgerItems === undefined ? (
+            {categoryMenuItems === undefined ? (
               <div className="flex h-full min-h-[240px] items-center justify-center text-zinc-500">
                 Loading menu…
               </div>
@@ -419,8 +462,10 @@ export default function PosApp() {
                                 {line.mealLabel}
                               </span>
                             </span>
-                          ) : (
+                          ) : line.sourceCategory === "Burgers" ? (
                             <span>Individual</span>
+                          ) : (
+                            <span>Regular</span>
                           )}
                         </div>
                       </div>
@@ -470,7 +515,7 @@ export default function PosApp() {
             <div className="flex justify-between text-sm text-zinc-400">
               <span>Subtotal</span>
               <span className="font-semibold text-zinc-100">
-                {formatPence(subtotalPence)}
+                {formatPence(cartSubtotalPence)}
               </span>
             </div>
             <div className="flex justify-between text-sm text-zinc-400">
@@ -481,7 +526,9 @@ export default function PosApp() {
             </div>
             <div className="flex justify-between text-lg font-bold text-white">
               <span>Total</span>
-              <span className="text-amber-300">{formatPence(totalPence)}</span>
+              <span className="text-amber-300">
+                {formatPence(cartSubtotalPence + deliveryFeePence)}
+              </span>
             </div>
             <button
               type="button"
@@ -490,6 +537,8 @@ export default function PosApp() {
                 setPayOpen(true);
                 setPayMethod("card");
                 setGivenRaw("");
+                setDiscountKind("percentage");
+                setDiscountRaw("");
               }}
               className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-amber-400 text-lg font-bold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -516,7 +565,8 @@ export default function PosApp() {
                   {sheetItem.name}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Base {formatPence(sheetItem.basePrice)}
+                  {mealEligible ? "Base " : "Price "}
+                  {formatPence(sheetItem.basePrice)}
                 </p>
               </div>
               <button
@@ -529,38 +579,40 @@ export default function PosApp() {
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setSheetMeal(false)}
-                className={[
-                  "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
-                  !sheetMeal
-                    ? "border-amber-400/70 bg-amber-400/10 text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Individual
-                <div className="mt-1 text-xs font-normal text-zinc-400">
-                  Base price only
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSheetMeal(true)}
-                className={[
-                  "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
-                  sheetMeal
-                    ? "border-amber-400/70 bg-amber-400/10 text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Make it a Meal
-                <div className="mt-1 text-xs font-normal text-zinc-400">
-                  + {formatPence(mealUpchargePence)} · {mealComboLabel}
-                </div>
-              </button>
-            </div>
+            {mealEligible ? (
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSheetMeal(false)}
+                  className={[
+                    "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
+                    !sheetMeal
+                      ? "border-amber-400/70 bg-amber-400/10 text-white"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Individual
+                  <div className="mt-1 text-xs font-normal text-zinc-400">
+                    Base price only
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSheetMeal(true)}
+                  className={[
+                    "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
+                    sheetMeal
+                      ? "border-amber-400/70 bg-amber-400/10 text-white"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Make it a Meal
+                  <div className="mt-1 text-xs font-normal text-zinc-400">
+                    + {formatPence(mealUpchargePence)} · {mealComboLabel}
+                  </div>
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-5 flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-zinc-300">
@@ -632,8 +684,86 @@ export default function PosApp() {
               </button>
             </div>
 
-            <div className="mt-4 text-center text-4xl font-extrabold text-amber-300">
-              {formatPence(totalPence)}
+            <div className="mt-4 space-y-1 text-sm text-zinc-400">
+              <div className="flex justify-between gap-3">
+                <span>Subtotal</span>
+                <span className="font-semibold text-zinc-200">
+                  {formatPence(cartSubtotalPence)}
+                </span>
+              </div>
+              {discountPence > 0 ? (
+                <div className="flex justify-between gap-3 text-emerald-300/90">
+                  <span>
+                    {discountKind === "percentage"
+                      ? `Discount (${parsePercentDiscountInput(discountRaw)}%)`
+                      : "Discount"}
+                  </span>
+                  <span className="shrink-0 font-semibold">
+                    {formatPence(-discountPence)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <p className="mt-2 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Amount due
+            </p>
+            <div className="text-center text-4xl font-extrabold text-amber-300">
+              {formatPence(amountDuePence)}
+            </div>
+
+            <div className="mt-5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                Discount
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiscountKind("percentage");
+                    setDiscountRaw("");
+                  }}
+                  className={[
+                    "min-h-14 rounded-2xl border text-sm font-bold",
+                    discountKind === "percentage"
+                      ? "border-amber-400/70 bg-amber-400/10 text-white"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Percentage
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiscountKind("fixed");
+                    setDiscountRaw("");
+                  }}
+                  className={[
+                    "min-h-14 rounded-2xl border text-sm font-bold",
+                    discountKind === "fixed"
+                      ? "border-amber-400/70 bg-amber-400/10 text-white"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Fixed (£)
+                </button>
+              </div>
+              <label className="mt-3 block text-sm font-semibold text-zinc-300">
+                {discountKind === "percentage"
+                  ? "Percent off subtotal"
+                  : "Amount off subtotal"}
+              </label>
+              <input
+                inputMode="decimal"
+                className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-amber-400/60"
+                value={discountRaw}
+                onChange={(e) => setDiscountRaw(e.target.value)}
+                placeholder={discountKind === "percentage" ? "0" : "0.00"}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                {discountKind === "percentage"
+                  ? "Enter 0–100 (decimals allowed). Leave empty for no discount."
+                  : "Enter a pound amount (e.g. 2.50). Capped at subtotal."}
+              </p>
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -690,7 +820,7 @@ export default function PosApp() {
                 </div>
                 {changeShort ? (
                   <p className="text-sm font-semibold text-red-300">
-                    Given amount is less than the total.
+                    Given amount is less than the amount due.
                   </p>
                 ) : null}
               </div>
@@ -714,33 +844,13 @@ export default function PosApp() {
                 className="min-h-14 rounded-2xl bg-amber-400 font-bold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={
                   payMethod === "cash" &&
-                  (givenPence === null || givenPence < totalPence)
+                  (givenPence === null || givenPence < amountDuePence)
                 }
                 onClick={() => void submit()}
               >
                 Submit Order
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {comingSoonLabel ? (
-        <div
-          className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-            <p className="text-lg font-semibold text-white">{comingSoonLabel}</p>
-            <p className="mt-2 text-sm text-zinc-400">Coming soon</p>
-            <button
-              type="button"
-              className="mt-6 min-h-14 w-full rounded-2xl bg-amber-400 text-lg font-bold text-zinc-950"
-              onClick={() => setComingSoonLabel(null)}
-            >
-              OK
-            </button>
           </div>
         </div>
       ) : null}

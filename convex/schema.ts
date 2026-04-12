@@ -36,6 +36,15 @@ export default defineSchema({
     orderType: v.string(),
     items: v.array(orderLine),
     subtotal: v.number(),
+    discountMode: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("percentage"),
+        v.literal("fixed"),
+      ),
+    ),
+    discountInput: v.optional(v.number()),
+    discountAmountPence: v.optional(v.number()),
     deliveryFee: v.number(),
     total: v.number(),
     paymentMethod: v.string(),

@@ -6,11 +6,15 @@ export type CategoryDef = {
 };
 
 export const CATEGORIES: CategoryDef[] = [
-  { id: "all_day_breakfast", label: "All Day Breakfast", convexCategory: null },
+  {
+    id: "all_day_breakfast",
+    label: "All Day Breakfast",
+    convexCategory: "All Day Breakfast",
+  },
   { id: "burgers", label: "Burgers", convexCategory: "Burgers" },
-  { id: "wraps", label: "Wraps", convexCategory: null },
-  { id: "rice", label: "Rice", convexCategory: null },
-  { id: "light_bites", label: "Light Bites", convexCategory: null },
-  { id: "hot_soups", label: "Hot Soups", convexCategory: null },
-  { id: "drinks", label: "Drinks", convexCategory: null },
+  { id: "wraps", label: "Wraps", convexCategory: "Wraps" },
+  { id: "rice", label: "Rice", convexCategory: "Rice" },
+  { id: "light_bites", label: "Light Bites", convexCategory: "Light Bites" },
+  { id: "hot_soups", label: "Hot Soups", convexCategory: "Hot Soups" },
+  { id: "drinks", label: "Drinks", convexCategory: "Drinks" },
 ];

@@ -10,22 +10,69 @@ const orderLine = v.object({
   lineTotal: v.number(),
 });
 
+const discountMode = v.union(
+  v.literal("none"),
+  v.literal("percentage"),
+  v.literal("fixed"),
+);
+
+function computeDiscountPence(
+  mode: "none" | "percentage" | "fixed",
+  input: number,
+  subtotal: number,
+): number {
+  if (mode === "none" || input <= 0 || subtotal <= 0) return 0;
+  if (mode === "percentage") {
+    const pct = Math.min(100, Math.max(0, input));
+    return Math.floor((subtotal * pct) / 100);
+  }
+  const fixed = Math.floor(input);
+  return Math.min(subtotal, Math.max(0, fixed));
+}
+
 export const submitOrder = mutationGeneric({
   args: {
     items: v.array(orderLine),
-    subtotal: v.number(),
     deliveryFee: v.number(),
-    total: v.number(),
     paymentMethod: v.union(v.literal("card"), v.literal("cash")),
     givenAmount: v.union(v.number(), v.null()),
-    changeAmount: v.union(v.number(), v.null()),
     totalItemCount: v.number(),
+    discountMode: discountMode,
+    discountInput: v.number(),
   },
   returns: v.object({
     orderNumber: v.number(),
     createdAt: v.number(),
+    subtotal: v.number(),
+    discountMode: discountMode,
+    discountInput: v.number(),
+    discountAmountPence: v.number(),
+    total: v.number(),
   }),
   handler: async (ctx, args) => {
+    const subtotal = args.items.reduce((acc, it) => acc + it.lineTotal, 0);
+    const discountAmountPence = computeDiscountPence(
+      args.discountMode,
+      args.discountInput,
+      subtotal,
+    );
+    const total =
+      subtotal - discountAmountPence + Math.max(0, args.deliveryFee);
+
+    const counted = args.items.reduce((acc, it) => acc + it.quantity, 0);
+    if (counted !== args.totalItemCount) {
+      throw new Error("totalItemCount does not match line items");
+    }
+
+    if (args.paymentMethod === "cash") {
+      if (args.givenAmount === null) {
+        throw new Error("givenAmount required for cash");
+      }
+      if (args.givenAmount < total) {
+        throw new Error("givenAmount is less than total");
+      }
+    }
+
     const existing = await ctx.db
       .query("counters")
       .withIndex("by_name", (q) => q.eq("name", "orders"))
@@ -41,21 +88,37 @@ export const submitOrder = mutationGeneric({
     }
 
     const createdAt = Date.now();
+    const changeAmount =
+      args.paymentMethod === "cash" && args.givenAmount !== null
+        ? args.givenAmount - total
+        : null;
+
     await ctx.db.insert("orders", {
       orderNumber,
       createdAt,
       status: "completed",
       orderType: "takeaway",
       items: args.items,
-      subtotal: args.subtotal,
+      subtotal,
+      discountMode: args.discountMode,
+      discountInput: args.discountInput,
+      discountAmountPence,
       deliveryFee: args.deliveryFee,
-      total: args.total,
+      total,
       paymentMethod: args.paymentMethod,
-      givenAmount: args.givenAmount,
-      changeAmount: args.changeAmount,
+      givenAmount: args.paymentMethod === "cash" ? args.givenAmount : null,
+      changeAmount,
       totalItemCount: args.totalItemCount,
     });
 
-    return { orderNumber, createdAt };
+    return {
+      orderNumber,
+      createdAt,
+      subtotal,
+      discountMode: args.discountMode,
+      discountInput: args.discountInput,
+      discountAmountPence,
+      total,
+    };
   },
 });
