@@ -51,6 +51,16 @@ function lineKey(itemName: string, isMeal: boolean) {
   return `${itemName}::${isMeal ? "meal" : "ind"}`;
 }
 
+/** Stable key for off-menu lines; avoids `|` in stored name for splitting. */
+function customCartLineKey(name: string, pricePence: number) {
+  const safe = name.trim().replace(/\|/g, " ");
+  return `custom|${pricePence}|${safe}`;
+}
+
+function isCustomCartLine(lineKey: string) {
+  return lineKey.startsWith("custom|");
+}
+
 function receiptDiscountLabel(
   mode: "none" | "percentage" | "fixed",
   input: number,
@@ -169,6 +179,10 @@ export default function PosApp() {
   const [sheetQty, setSheetQty] = useState(1);
   const [lfSeasoning, setLfSeasoning] = useState("None");
   const [lfAddons, setLfAddons] = useState<string[]>([]);
+
+  const [customItemOpen, setCustomItemOpen] = useState(false);
+  const [customItemName, setCustomItemName] = useState("");
+  const [customItemPriceRaw, setCustomItemPriceRaw] = useState("");
 
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
@@ -330,6 +344,47 @@ export default function PosApp() {
   const removeLine = useCallback((lineKey: string) => {
     setCart((prev) => prev.filter((l) => l.lineKey !== lineKey));
   }, []);
+
+  const customPricePence = parsePenceFromInput(customItemPriceRaw);
+  const canAddCustom =
+    customItemName.trim().length > 0 &&
+    customPricePence !== null &&
+    customPricePence > 0;
+
+  const addCustomItemToCart = useCallback(() => {
+    const name = customItemName.trim().slice(0, 120);
+    const price = parsePenceFromInput(customItemPriceRaw);
+    if (!name || price === null || price <= 0) return;
+    const key = customCartLineKey(name, price);
+    setCart((prev) => {
+      const idx = prev.findIndex((l) => l.lineKey === key);
+      if (idx === -1) {
+        return [
+          ...prev,
+          {
+            lineKey: key,
+            itemName: name,
+            sourceCategory: "Custom",
+            isMeal: false,
+            mealLabel: null,
+            basePricePence: price,
+            mealUpchargePence: 0,
+            unitPricePence: price,
+            quantity: 1,
+          },
+        ];
+      }
+      const next = [...prev];
+      next[idx] = {
+        ...next[idx],
+        quantity: next[idx].quantity + 1,
+      };
+      return next;
+    });
+    setCustomItemOpen(false);
+    setCustomItemName("");
+    setCustomItemPriceRaw("");
+  }, [customItemName, customItemPriceRaw]);
 
   const onCategoryTap = useCallback((cat: CategoryDef) => {
     setActiveCategoryId(cat.id);
@@ -557,6 +612,18 @@ export default function PosApp() {
             <div className="mt-1 text-sm text-zinc-400">
               Number is assigned when you submit payment.
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomItemOpen(true);
+                setCustomItemName("");
+                setCustomItemPriceRaw("");
+              }}
+              className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#00955e]/50 bg-[rgba(0,149,94,0.12)] text-base font-bold text-white shadow-[0_0_20px_-8px_rgba(0,149,94,0.2)] transition-colors hover:bg-[rgba(0,149,94,0.2)] active:scale-[0.99]"
+            >
+              <span className="text-xl leading-none text-[#00955e]">+</span>
+              Add item
+            </button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -577,7 +644,9 @@ export default function PosApp() {
                           {line.itemName}
                         </div>
                         <div className="mt-1 text-sm text-zinc-400">
-                          {line.itemName === "Loaded Fries" ? (
+                          {isCustomCartLine(line.lineKey) ? (
+                            <span className="text-zinc-400">Custom item</span>
+                          ) : line.itemName === "Loaded Fries" ? (
                             <div className="space-y-0.5">
                               <div>
                                 Seasoning:{" "}
@@ -870,6 +939,87 @@ export default function PosApp() {
                 onClick={addFromSheet}
               >
                 Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {customItemOpen ? (
+        <div
+          className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-item-title"
+        >
+          <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2
+                id="custom-item-title"
+                className="text-xl font-bold text-white"
+              >
+                Add item
+              </h2>
+              <button
+                type="button"
+                className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
+                onClick={() => {
+                  setCustomItemOpen(false);
+                  setCustomItemName("");
+                  setCustomItemPriceRaw("");
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-zinc-500">
+              Not on the menu — name and price only.
+            </p>
+
+            <label className="mt-5 block text-sm font-semibold text-zinc-300">
+              Item
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              maxLength={120}
+              className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
+              value={customItemName}
+              onChange={(e) => setCustomItemName(e.target.value)}
+              placeholder="e.g. Extra sauce pot"
+            />
+
+            <label className="mt-4 block text-sm font-semibold text-zinc-300">
+              Price
+            </label>
+            <input
+              inputMode="decimal"
+              className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
+              value={customItemPriceRaw}
+              onChange={(e) => setCustomItemPriceRaw(e.target.value)}
+              placeholder="0.00"
+            />
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 font-semibold text-white hover:bg-zinc-800"
+                onClick={() => {
+                  setCustomItemOpen(false);
+                  setCustomItemName("");
+                  setCustomItemPriceRaw("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!canAddCustom}
+                className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                onClick={addCustomItemToCart}
+              >
+                Add
               </button>
             </div>
           </div>
