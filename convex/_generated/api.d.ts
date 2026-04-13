@@ -10,6 +10,7 @@
 
 import type * as menu from "../menu.js";
 import type * as orders from "../orders.js";
+import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   menu: typeof menu;
   orders: typeof orders;
+  reports: typeof reports;
   seed: typeof seed;
 }>;
 

@@ -1,0 +1,26 @@
+export type TryoPrinterInfo = {
+  name: string;
+  description?: string;
+  status?: number;
+  isDefault?: boolean;
+};
+
+export type MenuPrintResult = { ok: true } | { ok: false; error?: string };
+
+export type ReceiptPrintResult = { ok: true } | { ok: false; error?: string };
+
+declare global {
+  interface Window {
+    tryoElectron?: {
+      printMenu: () => Promise<MenuPrintResult>;
+      listPrinters: () => Promise<TryoPrinterInfo[]>;
+      getReceiptPrinter: () => string;
+      printReceiptSilent: (deviceName: string) => Promise<ReceiptPrintResult>;
+    };
+    tryoMenuPrint?: {
+      signalReady: () => void;
+    };
+  }
+}
+
+export {};

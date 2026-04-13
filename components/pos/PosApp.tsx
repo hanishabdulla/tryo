@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/convex-api";
@@ -113,6 +114,7 @@ export default function PosApp() {
 
   const seedDb = useMutation(api.seed.seed);
   const submitOrder = useMutation(api.orders.submitOrder);
+  const addMenuItemMutation = useMutation(api.menu.addMenuItem);
 
   const seededRef = useRef(false);
   useEffect(() => {
@@ -216,6 +218,16 @@ export default function PosApp() {
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPriceRaw, setCustomItemPriceRaw] = useState("");
 
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuStep, setAddMenuStep] = useState<"category" | "details">(
+    "category",
+  );
+  const [addMenuCategory, setAddMenuCategory] = useState<string | null>(null);
+  const [addMenuName, setAddMenuName] = useState("");
+  const [addMenuPriceRaw, setAddMenuPriceRaw] = useState("");
+  const [addMenuSaving, setAddMenuSaving] = useState(false);
+  const [addMenuError, setAddMenuError] = useState<string | null>(null);
+
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
   const [givenRaw, setGivenRaw] = useState("");
@@ -231,7 +243,18 @@ export default function PosApp() {
     if (!receipt) return;
     if (printedOrderRef.current === receipt.orderNumber) return;
     printedOrderRef.current = receipt.orderNumber;
-    window.print();
+    const device = window.tryoElectron?.getReceiptPrinter?.() ?? "";
+    if (device.length > 0) {
+      void window.tryoElectron
+        ?.printReceiptSilent?.(device)
+        .then((r) => {
+          if (r && !r.ok && r.error) {
+            console.warn("Receipt print:", r.error);
+          }
+        });
+    } else {
+      window.print();
+    }
   }, [receipt]);
 
   const cartSubtotalPence = useMemo(
@@ -465,6 +488,45 @@ export default function PosApp() {
     setActiveCategoryId(cat.id);
   }, []);
 
+  const openAddMenu = useCallback(() => {
+    setAddMenuOpen(true);
+    setAddMenuStep("category");
+    setAddMenuCategory(null);
+    setAddMenuName("");
+    setAddMenuPriceRaw("");
+    setAddMenuError(null);
+  }, []);
+
+  const addMenuPricePence = parsePenceFromInput(addMenuPriceRaw);
+  const canSaveAddMenu =
+    addMenuCategory !== null &&
+    addMenuName.trim().length > 0 &&
+    addMenuPricePence !== null &&
+    addMenuPricePence >= 0;
+
+  const saveAddMenuItem = useCallback(async () => {
+    if (!addMenuCategory) return;
+    const name = addMenuName.trim().slice(0, 200);
+    const pence = parsePenceFromInput(addMenuPriceRaw);
+    if (!name || pence === null || pence < 0) return;
+    setAddMenuSaving(true);
+    setAddMenuError(null);
+    try {
+      await addMenuItemMutation({
+        category: addMenuCategory,
+        name,
+        basePrice: pence,
+      });
+      setAddMenuOpen(false);
+      const cat = CATEGORIES.find((c) => c.convexCategory === addMenuCategory);
+      if (cat) setActiveCategoryId(cat.id);
+    } catch (e) {
+      setAddMenuError(e instanceof Error ? e.message : "Could not save item");
+    } finally {
+      setAddMenuSaving(false);
+    }
+  }, [addMenuCategory, addMenuItemMutation, addMenuName, addMenuPriceRaw]);
+
   const onTileTap = useCallback(
     (item: MenuRow) => {
       openItemSheet(item);
@@ -653,7 +715,42 @@ export default function PosApp() {
             POS
           </span>
         </div>
-        <div className="text-xs text-zinc-500">Rushden Lakes · Takeaway</div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/daily"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+          >
+            Dashboard
+          </Link>
+          <button
+            type="button"
+            onClick={openAddMenu}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+          >
+            Add item
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const e = window.tryoElectron;
+              if (e) {
+                void e.printMenu().then((r) => {
+                  if (!r.ok && r.error) {
+                    console.warn("Menu print:", r.error);
+                  }
+                });
+              } else {
+                window.open("/print/menu", "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+          >
+            Print menu
+          </button>
+          <span className="hidden self-center text-xs text-zinc-500 sm:inline">
+            Rushden Lakes · Takeaway
+          </span>
+        </div>
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -731,7 +828,7 @@ export default function PosApp() {
               className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#00955e]/50 bg-[rgba(0,149,94,0.12)] text-base font-bold text-white shadow-[0_0_20px_-8px_rgba(0,149,94,0.2)] transition-colors hover:bg-[rgba(0,149,94,0.2)] active:scale-[0.99]"
             >
               <span className="text-xl leading-none text-[#00955e]">+</span>
-              Add item
+              Custom item
             </button>
           </div>
 
@@ -1185,6 +1282,162 @@ export default function PosApp() {
         </div>
       ) : null}
 
+      {addMenuOpen ? (
+        <div
+          className="fixed inset-0 z-[46] flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-menu-title"
+        >
+          <div className="max-h-[min(90dvh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2
+                id="add-menu-title"
+                className="text-xl font-bold text-white"
+              >
+                Add item
+              </h2>
+              <button
+                type="button"
+                className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
+                onClick={() => {
+                  setAddMenuOpen(false);
+                  setAddMenuStep("category");
+                  setAddMenuCategory(null);
+                  setAddMenuName("");
+                  setAddMenuPriceRaw("");
+                  setAddMenuError(null);
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-zinc-500">
+              {addMenuStep === "category"
+                ? "Choose a category. The item is saved to your menu and appears on the till and printed menu."
+                : "Name and price in pounds. Burgers and Wraps still use meal options like other items in those categories."}
+            </p>
+
+            {addMenuStep === "category" ? (
+              <>
+                <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {CATEGORIES.filter((c) => c.convexCategory).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 text-left text-sm font-semibold text-white hover:border-[#00955e]/50 hover:bg-zinc-900"
+                      onClick={() => {
+                        setAddMenuCategory(c.convexCategory!);
+                        setAddMenuStep("details");
+                        setAddMenuError(null);
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mt-5 min-h-12 w-full rounded-2xl border border-zinc-700 bg-zinc-950 text-sm font-semibold text-zinc-200 hover:bg-zinc-800"
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    setAddMenuStep("category");
+                    setAddMenuCategory(null);
+                    setAddMenuName("");
+                    setAddMenuPriceRaw("");
+                    setAddMenuError(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <div className="mt-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-zinc-300">
+                    Category:{" "}
+                    <span className="text-white">
+                      {CATEGORIES.find((x) => x.convexCategory === addMenuCategory)
+                        ?.label ?? addMenuCategory}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-[#00955e] hover:underline"
+                    onClick={() => {
+                      setAddMenuStep("category");
+                      setAddMenuCategory(null);
+                      setAddMenuError(null);
+                    }}
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <label className="mt-5 block text-sm font-semibold text-zinc-300">
+                  Item name
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  maxLength={200}
+                  className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
+                  value={addMenuName}
+                  onChange={(e) => setAddMenuName(e.target.value)}
+                  placeholder="e.g. Halloumi wrap"
+                />
+
+                <label className="mt-4 block text-sm font-semibold text-zinc-300">
+                  Price (£)
+                </label>
+                <input
+                  inputMode="decimal"
+                  className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
+                  value={addMenuPriceRaw}
+                  onChange={(e) => setAddMenuPriceRaw(e.target.value)}
+                  placeholder="6.50"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Type the price in pounds (you can use £ or decimals like 6.5).
+                </p>
+
+                {addMenuError ? (
+                  <p className="mt-3 text-sm font-medium text-red-400">
+                    {addMenuError}
+                  </p>
+                ) : null}
+
+                <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 font-semibold text-white hover:bg-zinc-800"
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      setAddMenuStep("category");
+                      setAddMenuCategory(null);
+                      setAddMenuName("");
+                      setAddMenuPriceRaw("");
+                      setAddMenuError(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSaveAddMenu || addMenuSaving}
+                    className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                    onClick={() => void saveAddMenuItem()}
+                  >
+                    {addMenuSaving ? "Saving…" : "Save to menu"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {customItemOpen ? (
         <div
           className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 sm:items-center"
@@ -1198,7 +1451,7 @@ export default function PosApp() {
                 id="custom-item-title"
                 className="text-xl font-bold text-white"
               >
-                Add item
+                Custom item
               </h2>
               <button
                 type="button"
