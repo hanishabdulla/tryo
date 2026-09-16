@@ -8,18 +8,30 @@ async function captureReceipt(contents, selector = '.receipt-paper') {
     await document.fonts.ready;
     const source = document.querySelector('#receipt-print-root ${selector}');
     if (!source || !source.textContent.trim()) throw new Error('No receipt is available to print.');
+    await Promise.all([...source.querySelectorAll('img')].map(image =>
+      image.complete ? Promise.resolve() : image.decode().catch(() => {})
+    ));
     const clone = source.cloneNode(true);
     const originals = [source, ...source.querySelectorAll('*')];
     const copies = [clone, ...clone.querySelectorAll('*')];
     const properties = ['display','font-size','font-weight','line-height','text-align',
       'text-transform','white-space','overflow-wrap','padding','margin','border',
       'border-top','border-bottom','max-width','box-sizing',
+      'width','height','overflow','transform','object-fit',
       'flex','flex-direction','flex-shrink','justify-content','align-items','gap'];
     originals.forEach((node, i) => {
       const computed = getComputedStyle(node);
       properties.forEach(key => copies[i].style.setProperty(key, computed.getPropertyValue(key)));
       copies[i].style.color = '#000';
       copies[i].style.fontFamily = 'monospace';
+      if (node instanceof HTMLImageElement && node.naturalWidth > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = node.naturalWidth;
+        canvas.height = node.naturalHeight;
+        canvas.getContext('2d').drawImage(node, 0, 0);
+        copies[i].src = canvas.toDataURL('image/png');
+        copies[i].removeAttribute('srcset');
+      }
     });
     clone.style.width = '72mm';
     clone.style.height = 'auto';

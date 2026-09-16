@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { formatPence } from "@/lib/money";
 
 export type ReceiptAddonLine = {
@@ -100,6 +101,26 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
     <div id="receipt-print-root" className="receipt-stage" aria-hidden={!data}>
       {data ? (
         <div className="receipt-paper font-mono text-[11px] leading-snug text-black">
+        <div
+          aria-hidden="true"
+          className="mx-auto mb-1"
+          style={{ width: "56mm", height: "20mm", overflow: "hidden" }}
+        >
+          <Image
+            src="/menulogo.png"
+            alt=""
+            width={1081}
+            height={1081}
+            preload
+            unoptimized
+            style={{
+              display: "block",
+              width: "56mm",
+              height: "56mm",
+              transform: "translateY(-18mm)",
+            }}
+          />
+        </div>
         <div className="mb-1 text-center text-[20px] font-bold leading-tight">{data.businessName}</div>
         <div className="text-center">{data.businessAddress}</div>
         <div className="text-center">Phone: {data.businessPhone}</div>
