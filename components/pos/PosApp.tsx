@@ -15,11 +15,14 @@ import {
   type ReceiptPayload,
 } from "./ReceiptStage";
 
+type ItemOption = { name: string; price: number };
+
 type MenuRow = {
   _id: string;
   name: string;
   description?: string;
   basePrice: number;
+  options?: ItemOption[];
 };
 
 type MenuCategory = {
@@ -40,10 +43,19 @@ type CartLine = {
   mealUpchargePence: number;
   unitPricePence: number;
   quantity: number;
+  options: ItemOption[];
+  note: string;
 };
 
-function lineKey(itemName: string, isMeal: boolean) {
-  return `${itemName}::${isMeal ? "meal" : "ind"}`;
+/** Same item, meal choice, options and instructions stack into one line. */
+function lineKey(
+  itemName: string,
+  isMeal: boolean,
+  options: ItemOption[],
+  note: string,
+) {
+  const names = options.map((o) => o.name).sort().join("|");
+  return `${itemName}::${isMeal ? "meal" : "ind"}::${names}::${note}`;
 }
 
 /** Stable key for off-menu lines; avoids `|` in stored name for splitting. */
@@ -117,6 +129,9 @@ export default function PosApp() {
   const [sheetItem, setSheetItem] = useState<MenuRow | null>(null);
   const [sheetMeal, setSheetMeal] = useState(false);
   const [sheetQty, setSheetQty] = useState(1);
+  const [sheetOptions, setSheetOptions] = useState<string[]>([]);
+  const [sheetNote, setSheetNote] = useState("");
+  const [sheetNoteOpen, setSheetNoteOpen] = useState(false);
   const [customItemOpen, setCustomItemOpen] = useState(false);
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPriceRaw, setCustomItemPriceRaw] = useState("");
@@ -256,15 +271,27 @@ export default function PosApp() {
     setSheetItem(item);
     setSheetMeal(false);
     setSheetQty(1);
+    setSheetOptions([]);
+    setSheetNote("");
+    setSheetNoteOpen(false);
   }, []);
+
+  const sheetOptionsPence = (sheetItem?.options ?? [])
+    .filter((o) => sheetOptions.includes(o.name))
+    .reduce((sum, o) => sum + o.price, 0);
 
   const addFromSheet = useCallback(() => {
     if (!sheetItem || !activeCategory) return;
     const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
-    const unit = sheetItem.basePrice + up;
+    const options = (sheetItem.options ?? []).filter((o) =>
+      sheetOptions.includes(o.name),
+    );
+    const note = sheetNote.trim().replace(/\s+/g, " ").slice(0, 200);
+    const unit =
+      sheetItem.basePrice + up + options.reduce((sum, o) => sum + o.price, 0);
     const label = isMeal ? activeMealComboLabel : null;
-    const key = lineKey(sheetItem.name, isMeal);
+    const key = lineKey(sheetItem.name, isMeal, options, note);
     setCart((prev) => {
       const idx = prev.findIndex((l) => l.lineKey === key);
       if (idx === -1) {
@@ -281,6 +308,8 @@ export default function PosApp() {
             mealUpchargePence: up,
             unitPricePence: unit,
             quantity: sheetQty,
+            options,
+            note,
           },
         ];
       }
@@ -299,6 +328,8 @@ export default function PosApp() {
     mealUpchargePence,
     sheetItem,
     sheetMeal,
+    sheetNote,
+    sheetOptions,
     sheetQty,
   ]);
 
@@ -345,6 +376,8 @@ export default function PosApp() {
             mealUpchargePence: 0,
             unitPricePence: price,
             quantity: 1,
+            options: [],
+            note: "",
           },
         ];
       }
@@ -397,6 +430,8 @@ export default function PosApp() {
       unitPrice: l.unitPricePence,
       quantity: l.quantity,
       lineTotal: l.unitPricePence * l.quantity,
+      ...(l.options.length ? { addons: l.options.map((o) => o.name) } : {}),
+      ...(l.note ? { note: l.note } : {}),
     }));
 
     if (orderInFlight.current) return;
@@ -429,6 +464,10 @@ export default function PosApp() {
       isMeal: l.isMeal,
       mealLabel: l.mealLabel,
       mealLineTotalPence: l.isMeal ? l.mealUpchargePence * l.quantity : 0,
+      addonLines: l.options.length
+        ? l.options.map((o) => ({ name: o.name, lineTotalPence: o.price * l.quantity }))
+        : undefined,
+      note: l.note || undefined,
     }));
 
     setReceipt({
@@ -658,6 +697,19 @@ export default function PosApp() {
                             <span>Regular</span>
                           )}
                         </div>
+                        {line.options.length > 0 ? (
+                          <div className="mt-0.5 text-sm text-zinc-400">
+                            +{" "}
+                            <span className="text-zinc-300">
+                              {line.options.map((o) => o.name).join(", ")}
+                            </span>
+                          </div>
+                        ) : null}
+                        {line.note ? (
+                          <div className="mt-0.5 text-sm text-amber-300">
+                            Note: {line.note}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="shrink-0 text-right">
                         <div className="text-sm font-semibold text-[#00955e]">
@@ -745,7 +797,7 @@ export default function PosApp() {
           aria-modal="true"
           aria-labelledby="item-sheet-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2
@@ -755,8 +807,14 @@ export default function PosApp() {
                   {sheetItem.name}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  {mealEligible ? "Base " : "Price "}
+                  {mealEligible || sheetItem.options?.length ? "Base " : "Price "}
                   {formatPence(sheetItem.basePrice)}
+                  {sheetOptionsPence > 0 ? (
+                    <span className="font-semibold text-[#00955e]">
+                      {" "}
+                      · with extras {formatPence(sheetItem.basePrice + sheetOptionsPence)}
+                    </span>
+                  ) : null}
                 </p>
                 {sheetItem.description ? (
                   <p className="mt-2 text-sm text-zinc-500">
@@ -808,6 +866,73 @@ export default function PosApp() {
                 </button>
               </div>
             ) : null}
+
+            {sheetItem.options?.length ? (
+              <div className="mt-5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                  Extras
+                </p>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {sheetItem.options.map((option) => {
+                    const on = sheetOptions.includes(option.name);
+                    return (
+                      <button
+                        key={option.name}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          setSheetOptions((prev) =>
+                            on
+                              ? prev.filter((name) => name !== option.name)
+                              : [...prev, option.name],
+                          )
+                        }
+                        className={[
+                          "flex min-h-14 items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
+                          on
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        <span>
+                          {on ? "✓ " : "+ "}
+                          {option.name}
+                        </span>
+                        <span className="text-xs font-normal text-[#00955e]">
+                          +{formatPence(option.price)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {sheetNoteOpen ? (
+              <label className="mt-5 block">
+                <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                  Custom instructions
+                </span>
+                <textarea
+                  value={sheetNote}
+                  onChange={(e) => setSheetNote(e.target.value)}
+                  maxLength={200}
+                  rows={2}
+                  autoFocus
+                  placeholder="e.g. no onions, sauce on the side"
+                  className="mt-2 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base text-white outline-none focus:border-[#00955e]/70"
+                />
+              </label>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSheetNoteOpen(true)}
+                className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-700 bg-zinc-950 text-sm font-semibold text-zinc-200 hover:border-[#00955e]/50"
+              >
+                <span className="text-lg leading-none text-[#00955e]">+</span>
+                Custom instructions
+              </button>
+            )}
 
             <div className="mt-5 flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-zinc-300">

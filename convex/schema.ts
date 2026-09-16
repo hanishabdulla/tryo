@@ -13,6 +13,8 @@ const orderLine = v.object({
   addons: v.optional(v.array(v.string())),
   hotDogOnion: v.optional(v.union(v.string(), v.null())),
   hotDogCheese: v.optional(v.boolean()),
+  /** Custom instructions typed on the till. */
+  note: v.optional(v.string()),
 });
 
 export default defineSchema({
@@ -32,6 +34,8 @@ export default defineSchema({
     category: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
+    /** Paid extras offered in the till popup, e.g. Cheese +125p. */
+    options: v.optional(v.array(v.object({ name: v.string(), price: v.number() }))),
     basePrice: v.number(),
     available: v.boolean(),
     sortOrder: v.number(),

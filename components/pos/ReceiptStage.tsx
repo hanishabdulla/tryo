@@ -20,6 +20,8 @@ export type ReceiptLinePrint = {
   sauce?: string | null;
   /** Loaded Fries — each row shows qty × add-on and line total */
   addonLines?: ReceiptAddonLine[];
+  /** Custom instructions typed on the till. */
+  note?: string;
 };
 
 export type ReceiptPayload = {
@@ -80,6 +82,11 @@ function KitchenTicket({ data }: { data: ReceiptPayload }) {
               + {ad.name}
             </div>
           ))}
+          {line.note ? (
+            <div className="mt-0.5 border-l-4 border-black pl-3 font-bold">
+              NOTE: {line.note}
+            </div>
+          ) : null}
         </div>
       ))}
       <div className="my-2 border-t-2 border-black" />
@@ -149,6 +156,9 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
                   </div>
                 ))
               : null}
+            {line.note ? (
+              <div className="mt-0.5 pl-3 text-[10px]">Note: {line.note}</div>
+            ) : null}
           </div>
         ))}
         <div className="my-2 border-t border-dashed border-black" />

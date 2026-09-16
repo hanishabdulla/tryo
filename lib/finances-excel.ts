@@ -30,6 +30,7 @@ export type OrderRow = {
     addons?: string[];
     hotDogOnion?: string | null;
     hotDogCheese?: boolean;
+    note?: string;
   }>;
 };
 
@@ -81,6 +82,7 @@ export function buildFinancesWorkbook(orders: OrderRow[]): XLSX.WorkBook {
       if (line.hotDogOnion != null && line.hotDogOnion !== "None")
         extras.push(`onion=${line.hotDogOnion}`);
       if (line.hotDogCheese) extras.push("cheese=yes");
+      if (line.note) extras.push(`note=${line.note}`);
       lineRows.push({
         OrderNo: o.orderNumber,
         DateTime: formatTsLocal(o.createdAt),

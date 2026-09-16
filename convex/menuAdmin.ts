@@ -27,6 +27,8 @@ export const saveItem = mutationGeneric({
     description: v.string(),
     basePrice: v.number(),
     available: v.boolean(),
+    /** Omit to keep the item's current options. */
+    options: v.optional(v.array(v.object({ name: v.string(), price: v.number() }))),
   },
   handler: async (ctx, { token, id, ...args }) => {
     await requireDashboardSession(ctx, token);
@@ -41,6 +43,14 @@ export const saveItem = mutationGeneric({
       description: args.description.trim().slice(0, 300),
       basePrice: cleanPrice(args.basePrice),
       available: args.available,
+      ...(args.options
+        ? {
+            options: args.options.slice(0, 20).map((o) => ({
+              name: cleanName(o.name, "Option"),
+              price: cleanPrice(o.price),
+            })),
+          }
+        : {}),
     };
     const siblings = await ctx.db
       .query("menuItems")

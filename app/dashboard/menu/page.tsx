@@ -18,6 +18,7 @@ type Item = {
   description?: string;
   basePrice: number;
   available: boolean;
+  options?: { name: string; price: number }[];
 };
 
 type ItemDraft = {
@@ -27,6 +28,7 @@ type ItemDraft = {
   description: string;
   price: string;
   available: boolean;
+  options: { name: string; price: string }[];
 };
 
 type CategoryDraft = { id?: string; name: string; mealUpgrade: boolean };
@@ -97,6 +99,16 @@ export default function MenuPage() {
       setError("Enter a price in pounds, for example 6.99");
       return;
     }
+    const options = [];
+    for (const option of itemDraft.options) {
+      if (!option.name.trim() && !option.price.trim()) continue;
+      const optionPrice = parsePenceFromInput(option.price);
+      if (!option.name.trim() || optionPrice === null) {
+        setError("Each extra needs a name and a price, for example Cheese 1.25");
+        return;
+      }
+      options.push({ name: option.name, price: optionPrice });
+    }
     const ok = await run("saveItem", {
       ...(itemDraft.id ? { id: itemDraft.id } : {}),
       category: itemDraft.category,
@@ -104,6 +116,7 @@ export default function MenuPage() {
       description: itemDraft.description,
       basePrice: price,
       available: itemDraft.available,
+      options,
     });
     if (ok) setItemDraft(null);
   }
@@ -176,6 +189,7 @@ export default function MenuPage() {
                 description: "",
                 price: "",
                 available: true,
+                options: [],
               });
             }}
             className="min-h-11 rounded-xl bg-[#00955e] px-4 text-sm font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] disabled:opacity-40"
@@ -332,6 +346,14 @@ export default function MenuPage() {
                         {item.description ? (
                           <p className="mt-1 text-sm text-zinc-500">{item.description}</p>
                         ) : null}
+                        {item.options?.length ? (
+                          <p className="mt-1 text-xs text-zinc-400">
+                            Extras:{" "}
+                            {item.options
+                              .map((o) => `${o.name} +${formatPence(o.price)}`)
+                              .join(", ")}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -372,6 +394,10 @@ export default function MenuPage() {
                               description: item.description ?? "",
                               price: (item.basePrice / 100).toFixed(2),
                               available: item.available,
+                              options: (item.options ?? []).map((o) => ({
+                                name: o.name,
+                                price: (o.price / 100).toFixed(2),
+                              })),
                             });
                           }}
                         >
@@ -448,6 +474,64 @@ export default function MenuPage() {
                 placeholder="6.99"
               />
             </label>
+            <fieldset className="mt-4">
+              <legend className="text-sm font-medium text-zinc-300">
+                Extras <span className="text-zinc-500">(optional, shown as add-ons on the till)</span>
+              </legend>
+              {itemDraft.options.map((option, index) => (
+                <div key={index} className="mt-2 flex gap-2">
+                  <input
+                    aria-label="Extra name"
+                    value={option.name}
+                    maxLength={120}
+                    placeholder="Cheese"
+                    onChange={(e) => {
+                      const options = [...itemDraft.options];
+                      options[index] = { ...option, name: e.target.value };
+                      setItemDraft({ ...itemDraft, options });
+                    }}
+                    className={`${inputClass} mt-0 flex-1`}
+                  />
+                  <input
+                    aria-label="Extra price in pounds"
+                    inputMode="decimal"
+                    value={option.price}
+                    placeholder="1.25"
+                    onChange={(e) => {
+                      const options = [...itemDraft.options];
+                      options[index] = { ...option, price: e.target.value };
+                      setItemDraft({ ...itemDraft, options });
+                    }}
+                    className={`${inputClass} mt-0 w-24`}
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Remove ${option.name || "extra"}`}
+                    onClick={() =>
+                      setItemDraft({
+                        ...itemDraft,
+                        options: itemDraft.options.filter((_, i) => i !== index),
+                      })
+                    }
+                    className="h-12 rounded-xl bg-zinc-800 px-3 text-sm text-zinc-300"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setItemDraft({
+                    ...itemDraft,
+                    options: [...itemDraft.options, { name: "", price: "" }],
+                  })
+                }
+                className={`${smallButton} mt-2`}
+              >
+                + Add extra
+              </button>
+            </fieldset>
             <label className="mt-4 flex items-center gap-3 text-sm font-medium text-zinc-300">
               <input
                 type="checkbox"

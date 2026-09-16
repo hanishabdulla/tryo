@@ -11,7 +11,7 @@ export const seed = mutationGeneric({
   handler: async () => ({ ok: true as const }),
 });
 
-type Item = [name: string, pounds: number, description?: string];
+type Item = [name: string, pounds: number, description?: string, options?: { name: string; price: number }[]];
 
 const LOADED_TOPPINGS =
   "Loaded with house sauce, creamy cheese sauce & a kick of Cajun seasoning, then topped with crispy onions and melted cheddar";
@@ -40,7 +40,7 @@ const MENU: { name: string; mealUpgrade: boolean; items: Item[] }[] = [
       ["Vegan Falafel Loaded Fries", 8.99, "Topped with crispy falafel, vegan cheese, seasoning, vegan mayo, gherkins, jalapenos"],
       ["The Dirty Fries (Regular)", 10.99, "The ultimate mix of meats, extra cheese sauce, gherkins, jalapenos"],
       ["The Dirty Fries (Spicy)", 10.99, "The ultimate mix of meats, extra cheese sauce, gherkins, jalapenos"],
-      ["Classic Hot Dog", 3.99, "Beef sausage in a soft brioche bun with ketchup and mustard"],
+      ["Classic Hot Dog", 3.99, "Beef sausage in a soft brioche bun with ketchup and mustard", [{ name: "Cheese", price: 125 }]],
       ["Jumbo Hot Dog", 5.99],
       ["Chilli Cheese Nuggets", 3.99],
       ["Regular Fries", 3.99],
@@ -147,11 +147,12 @@ export const replaceMenu = internalMutationGeneric({
         mealUpgrade: category.mealUpgrade,
         sortOrder: (c + 1) * 10,
       });
-      for (const [i, [name, pounds, description]] of category.items.entries()) {
+      for (const [i, [name, pounds, description, options]] of category.items.entries()) {
         await ctx.db.insert("menuItems", {
           category: category.name,
           name,
           description: description ?? "",
+          ...(options ? { options } : {}),
           basePrice: Math.round(pounds * 100),
           available: true,
           sortOrder: (i + 1) * 10,

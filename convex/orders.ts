@@ -13,6 +13,7 @@ const orderLine = v.object({
   addons: v.optional(v.array(v.string())),
   hotDogOnion: v.optional(v.union(v.string(), v.null())),
   hotDogCheese: v.optional(v.boolean()),
+  note: v.optional(v.string()),
 });
 
 const discountMode = v.union(
