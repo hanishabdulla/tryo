@@ -1,6 +1,6 @@
 {
   "name": "tryo",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Tryo takeaway point of sale",
   "author": "Tryo",
@@ -19,7 +19,6 @@
   "dependencies": {
     "convex": "^1.35.1",
     "next": "^16.3.5",
-    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "xlsx": "^0.18.5"

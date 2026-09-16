@@ -1,6 +1,5 @@
 "use client";
 
-import { QRCodeSVG } from "qrcode.react";
 import { formatPence } from "@/lib/money";
 
 export type ReceiptAddonLine = {
@@ -38,7 +37,6 @@ export type ReceiptPayload = {
   businessAddress: string;
   businessPhone: string;
   businessVat: string;
-  qrUrl: string;
 };
 
 function formatReceiptTimestamp(ts: number): string {
@@ -95,7 +93,7 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
     <div id="receipt-print-root" className="receipt-stage" aria-hidden={!data}>
       {data ? (
         <div className="receipt-paper font-mono text-[11px] leading-snug text-black">
-        <div className="text-center font-semibold">{data.businessName}</div>
+        <div className="mb-1 text-center text-[20px] font-bold leading-tight">{data.businessName}</div>
         <div className="text-center">{data.businessAddress}</div>
         <div className="text-center">Phone: {data.businessPhone}</div>
         <div className="text-center">VAT Number: {data.businessVat}</div>
@@ -185,9 +183,6 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
         <div className="my-2 border-t border-dashed border-black" />
         <div className="text-center">Thank you for visiting us!</div>
         <div className="my-2 border-t border-dashed border-black" />
-        <div className="flex justify-center py-2">
-          <QRCodeSVG value={data.qrUrl} size={112} level="M" />
-        </div>
         <div className="text-center">Served by: Staff</div>
         </div>
       ) : null}

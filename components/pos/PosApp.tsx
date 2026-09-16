@@ -111,10 +111,6 @@ export default function PosApp() {
       : "+44 7825583940";
   const businessVat =
     typeof config?.businessVat === "string" ? config.businessVat : "491891448";
-  const qrUrl =
-    typeof config?.receiptQrUrl === "string"
-      ? config.receiptQrUrl
-      : "https://www.tryoeats.uk/";
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -454,7 +450,6 @@ export default function PosApp() {
       businessAddress,
       businessPhone,
       businessVat,
-      qrUrl,
     });
 
     setCart([]);
@@ -475,7 +470,6 @@ export default function PosApp() {
     discountRaw,
     givenPence,
     payMethod,
-    qrUrl,
     submitOrder,
     totalItemCount,
   ]);
