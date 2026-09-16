@@ -50,6 +50,11 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
+          ### Receipt printer fix (v0.1.1)
+          - Fixes Windows silent printing reporting success while outputting blank 80mm receipts (Electron/Chromium page-size regression).
+          - Order and **Reprint last** now wait for receipt layout before sending the print job.
+
+          ### Setup
           1. Download and run the `.exe` installer.
           2. Install the receipt printer's Windows driver and confirm it appears in Windows Settings > Printers & scanners.
           3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
