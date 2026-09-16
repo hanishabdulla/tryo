@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { verifyDashboardToken } from "@/lib/dashboard-verify-edge";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/dashboard/login") {
@@ -26,10 +26,7 @@ export async function middleware(request: NextRequest) {
   const ok = await verifyDashboardToken(token, secret);
   if (!ok) {
     const login = new URL("/dashboard/login", request.url);
-    login.searchParams.set(
-      "next",
-      `${pathname}${request.nextUrl.search}`,
-    );
+    login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(login);
   }
 

@@ -3,19 +3,15 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("tryoElectron", {
   /** Opens a hidden window, loads /print/menu, then prints (silent if ELECTRON_MENU_PRINTER set). */
   printMenu: () => ipcRenderer.invoke("menu:print"),
-  /** System printers (for picking `ELECTRON_MENU_PRINTER` device name). */
+  /** Printers registered with the operating system. */
   listPrinters: () => ipcRenderer.invoke("print:listPrinters"),
-  /**
-   * Printer name for silent receipt print (e.g. macOS "EML POS-80C").
-   * Set `ELECTRON_RECEIPT_PRINTER` or `ELECTRON_MENU_PRINTER` in `.env.local` or the shell.
-   */
-  getReceiptPrinter: () =>
-    (process.env.ELECTRON_RECEIPT_PRINTER ||
-      process.env.ELECTRON_MENU_PRINTER ||
-      "").trim(),
+  getReceiptPrinter: () => ipcRenderer.invoke("print:getReceiptPrinter"),
+  setReceiptPrinter: (deviceName) =>
+    ipcRenderer.invoke("print:setReceiptPrinter", deviceName),
+  testReceiptPrinter: (deviceName) =>
+    ipcRenderer.invoke("print:testReceiptPrinter", deviceName),
   /** Print the current window (uses #receipt-print-root @media print CSS). */
-  printReceiptSilent: (deviceName) =>
-    ipcRenderer.invoke("receipt-print-silent", deviceName),
+  printReceiptSilent: () => ipcRenderer.invoke("receipt-print-silent"),
 });
 
 contextBridge.exposeInMainWorld("tryoMenuPrint", {

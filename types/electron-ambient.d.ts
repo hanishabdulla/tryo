@@ -14,8 +14,10 @@ declare global {
     tryoElectron?: {
       printMenu: () => Promise<MenuPrintResult>;
       listPrinters: () => Promise<TryoPrinterInfo[]>;
-      getReceiptPrinter: () => string;
-      printReceiptSilent: (deviceName: string) => Promise<ReceiptPrintResult>;
+      getReceiptPrinter: () => Promise<string>;
+      setReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
+      testReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
+      printReceiptSilent: () => Promise<ReceiptPrintResult>;
     };
     tryoMenuPrint?: {
       signalReady: () => void;

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 function LoginForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const nextPath = searchParams.get("next") || "/dashboard/daily";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,8 @@ function LoginForm() {
         return;
       }
       const dest = nextPath.startsWith("/") ? nextPath : "/dashboard/daily";
-      window.location.assign(dest);
+      router.replace(dest);
+      router.refresh();
     } catch {
       setError("Network error");
     } finally {

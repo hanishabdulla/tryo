@@ -1,0 +1,60 @@
+name: Build Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source
+        run: npm run lint
+
+      - name: Build Windows installer
+        run: npm run electron:dist -- --win --x64
+
+      - name: Keep installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tryo-pos-windows-${{ github.ref_name }}
+          path: |
+            release/*.exe
+            release/*.blockmap
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = (Get-ChildItem release/*.exe, release/*.blockmap).FullName
+          $notes = @"
+          ## Tryo POS for Windows
+
+          1. Download and run the `.exe` installer.
+          2. Install the receipt printer's Windows driver and confirm it appears in Windows Settings > Printers & scanners.
+          3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
+          4. Save the printer. Completed orders then print silently and **Reprint last** remains available.
+
+          This build uses the configured Convex deployment and requires an internet connection.
+          "@
+          gh release create $env:GITHUB_REF_NAME $assets --title "Tryo POS $env:GITHUB_REF_NAME" --notes $notes

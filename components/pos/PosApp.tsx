@@ -238,24 +238,78 @@ export default function PosApp() {
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
   const printedOrderRef = useRef<number | null>(null);
+  const [printerOpen, setPrinterOpen] = useState(false);
+  const [printers, setPrinters] = useState<
+    { name: string; description?: string; isDefault?: boolean }[]
+  >([]);
+  const [configuredPrinter, setConfiguredPrinter] = useState("");
+  const [selectedPrinter, setSelectedPrinter] = useState("");
+  const [printerBusy, setPrinterBusy] = useState(false);
+  const [printerMessage, setPrinterMessage] = useState<string | null>(null);
+
+  const refreshPrinters = useCallback(async () => {
+    const electron = window.tryoElectron;
+    if (!electron) return;
+    setPrinterBusy(true);
+    setPrinterMessage(null);
+    try {
+      const [available, saved] = await Promise.all([
+        electron.listPrinters(),
+        electron.getReceiptPrinter(),
+      ]);
+      setPrinters(available);
+      setConfiguredPrinter(saved);
+      setSelectedPrinter(
+        saved || available.find((printer) => printer.isDefault)?.name || "",
+      );
+      if (available.length === 0) {
+        setPrinterMessage(
+          "No printers found. Install the Windows printer driver, then refresh.",
+        );
+      }
+    } catch {
+      setPrinterMessage("Could not read printers from the operating system.");
+    } finally {
+      setPrinterBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const electron = window.tryoElectron;
+    if (!electron) return;
+    void electron.getReceiptPrinter().then(setConfiguredPrinter).catch(() => {});
+  }, []);
+
+  const printCurrentReceipt = useCallback(async () => {
+    const electron = window.tryoElectron;
+    if (!electron) {
+      window.print();
+      return true;
+    }
+    const device = await electron.getReceiptPrinter();
+    setConfiguredPrinter(device);
+    if (!device) {
+      setPrinterOpen(true);
+      await refreshPrinters();
+      setPrinterMessage("Choose and test a receipt printer before taking orders.");
+      return false;
+    }
+    const result = await electron.printReceiptSilent();
+    if (!result.ok) {
+      setPrinterMessage(result.error || "Receipt printing failed.");
+      setPrinterOpen(true);
+      return false;
+    }
+    return true;
+  }, [refreshPrinters]);
 
   useEffect(() => {
     if (!receipt) return;
     if (printedOrderRef.current === receipt.orderNumber) return;
     printedOrderRef.current = receipt.orderNumber;
-    const device = window.tryoElectron?.getReceiptPrinter?.() ?? "";
-    if (device.length > 0) {
-      void window.tryoElectron
-        ?.printReceiptSilent?.(device)
-        .then((r) => {
-          if (r && !r.ok && r.error) {
-            console.warn("Receipt print:", r.error);
-          }
-        });
-    } else {
-      window.print();
-    }
-  }, [receipt]);
+    const frame = requestAnimationFrame(() => void printCurrentReceipt());
+    return () => cancelAnimationFrame(frame);
+  }, [printCurrentReceipt, receipt]);
 
   const cartSubtotalPence = useMemo(
     () =>
@@ -746,6 +800,27 @@ export default function PosApp() {
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
           >
             Print menu
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPrinterOpen(true);
+              void refreshPrinters();
+            }}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${configuredPrinter ? "bg-[#00955e]" : "bg-amber-400"}`}
+            />
+            Receipt printer
+          </button>
+          <button
+            type="button"
+            disabled={!receipt}
+            onClick={() => void printCurrentReceipt()}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Reprint last
           </button>
           <span className="hidden self-center text-xs text-zinc-500 sm:inline">
             Rushden Lakes · Takeaway
@@ -1709,6 +1784,121 @@ export default function PosApp() {
                 onClick={() => void submit()}
               >
                 Submit Order
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {printerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-lg rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Receipt printer</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Select the Windows printer exactly as it appears in Settings,
+                  then print a test receipt.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrinterOpen(false)}
+                className="rounded-xl px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <label className="mt-6 block text-sm font-semibold text-zinc-300">
+              Installed printer
+              <select
+                value={selectedPrinter}
+                onChange={(event) => {
+                  setSelectedPrinter(event.target.value);
+                  setPrinterMessage(null);
+                }}
+                disabled={printerBusy}
+                className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none focus:border-[#00955e]"
+              >
+                <option value="">Choose a printer…</option>
+                {printers.map((printer) => (
+                  <option key={printer.name} value={printer.name}>
+                    {printer.name}
+                    {printer.isDefault ? " (Windows default)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {configuredPrinter ? (
+              <p className="mt-3 text-xs text-[#49d69d]">
+                Automatic receipt printing: {configuredPrinter}
+              </p>
+            ) : null}
+            {printerMessage ? (
+              <p className="mt-3 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-300">
+                {printerMessage}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                disabled={printerBusy}
+                onClick={() => void refreshPrinters()}
+                className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-800 px-4 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                disabled={printerBusy || !selectedPrinter}
+                onClick={() => {
+                  const electron = window.tryoElectron;
+                  if (!electron) return;
+                  setPrinterBusy(true);
+                  setPrinterMessage(null);
+                  void electron
+                    .testReceiptPrinter(selectedPrinter)
+                    .then((result) =>
+                      setPrinterMessage(
+                        result.ok
+                          ? "Test receipt sent successfully."
+                          : result.error || "Test print failed.",
+                      ),
+                    )
+                    .finally(() => setPrinterBusy(false));
+                }}
+                className="min-h-12 rounded-xl border border-[#00955e]/50 bg-[#00955e]/10 px-4 text-sm font-semibold text-[#49d69d] disabled:opacity-40"
+              >
+                Test print
+              </button>
+              <button
+                type="button"
+                disabled={printerBusy || !selectedPrinter}
+                onClick={() => {
+                  const electron = window.tryoElectron;
+                  if (!electron) return;
+                  setPrinterBusy(true);
+                  setPrinterMessage(null);
+                  void electron
+                    .setReceiptPrinter(selectedPrinter)
+                    .then((result) => {
+                      if (result.ok) {
+                        setConfiguredPrinter(selectedPrinter);
+                        setPrinterMessage(
+                          "Saved. Completed orders will print automatically.",
+                        );
+                      } else {
+                        setPrinterMessage(result.error || "Could not save printer.");
+                      }
+                    })
+                    .finally(() => setPrinterBusy(false));
+                }}
+                className="min-h-12 rounded-xl bg-[#00955e] px-4 text-sm font-bold text-white shadow-[var(--tryo-glow)] disabled:opacity-40"
+              >
+                Save printer
               </button>
             </div>
           </div>

@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const linkClass =
   "inline-flex min-h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors";
 
 export function DashboardNav() {
   const path = usePathname();
+  const router = useRouter();
   if (path === "/dashboard/login") {
     return null;
   }
 
   async function logout() {
     await fetch("/api/dashboard-auth", { method: "DELETE" });
-    window.location.assign("/dashboard/login");
+    router.replace("/dashboard/login");
+    router.refresh();
   }
 
   return (
