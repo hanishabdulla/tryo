@@ -1,7 +1,6 @@
 "use client";
 
 import { QRCodeSVG } from "qrcode.react";
-import { useLayoutEffect } from "react";
 import { formatPence } from "@/lib/money";
 
 export type ReceiptAddonLine = {
@@ -49,11 +48,6 @@ function formatReceiptTimestamp(ts: number): string {
 }
 
 export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
-  useLayoutEffect(() => {
-    if (!data) return;
-    window.tryoReceiptPrint?.signalReady();
-  }, [data]);
-
   return (
     <div id="receipt-print-root" className="receipt-stage" aria-hidden={!data}>
       {data ? (

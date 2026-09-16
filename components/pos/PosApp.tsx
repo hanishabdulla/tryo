@@ -237,6 +237,11 @@ export default function PosApp() {
   const [discountRaw, setDiscountRaw] = useState("");
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const orderInFlight = useRef(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const receiptInFlight = useRef(false);
   const printedOrderRef = useRef<number | null>(null);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [printers, setPrinters] = useState<
@@ -281,6 +286,10 @@ export default function PosApp() {
   }, []);
 
   const printCurrentReceipt = useCallback(async () => {
+    if (receiptInFlight.current) return false;
+    receiptInFlight.current = true;
+    setReceiptBusy(true);
+    try {
     const electron = window.tryoElectron;
     if (!electron) {
       window.print();
@@ -301,6 +310,14 @@ export default function PosApp() {
       return false;
     }
     return true;
+    } catch (error) {
+      setPrinterMessage(`Order saved; receipt was not printed. ${error instanceof Error ? error.message : "Check the printer connection."} Use Reprint last after fixing it.`);
+      setPrinterOpen(true);
+      return false;
+    } finally {
+      receiptInFlight.current = false;
+      setReceiptBusy(false);
+    }
   }, [refreshPrinters]);
 
   useEffect(() => {
@@ -637,7 +654,13 @@ export default function PosApp() {
       return row;
     });
 
-    const res = await submitOrder({
+    if (orderInFlight.current) return;
+    orderInFlight.current = true;
+    setOrderBusy(true);
+    setOrderError(null);
+    let res;
+    try {
+      res = await submitOrder({
       items,
       deliveryFee: deliveryFeePence,
       paymentMethod: payMethod,
@@ -645,7 +668,14 @@ export default function PosApp() {
       totalItemCount,
       discountMode: serverDiscountMode,
       discountInput: serverDiscountInput,
-    });
+      });
+    } catch (error) {
+      setOrderError(`Order could not be saved: ${error instanceof Error ? error.message : "Check your internet connection and try again."}`);
+      return;
+    } finally {
+      orderInFlight.current = false;
+      setOrderBusy(false);
+    }
 
     const lines: ReceiptLinePrint[] = cart.map((l) => {
       if (l.itemName === "Loaded Fries") {
@@ -815,11 +845,11 @@ export default function PosApp() {
           </button>
           <button
             type="button"
-            disabled={!receipt}
+            disabled={!receipt || receiptBusy}
             onClick={() => void printCurrentReceipt()}
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Reprint last
+            {receiptBusy ? "Printing…" : "Reprint last"}
           </button>
           <span className="hidden self-center text-xs text-zinc-500 sm:inline">
             Rushden Lakes · Takeaway
@@ -1765,9 +1795,11 @@ export default function PosApp() {
               </p>
             )}
 
+            {orderError ? <p role="alert" className="mt-4 text-sm text-red-300">{orderError}</p> : null}
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
+                disabled={orderBusy}
                 className="min-h-14 rounded-2xl bg-zinc-800 font-semibold text-white"
                 onClick={() => setPayOpen(false)}
               >
@@ -1777,12 +1809,12 @@ export default function PosApp() {
                 type="button"
                 className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 disabled={
-                  payMethod === "cash" &&
-                  (givenPence === null || givenPence < amountDuePence)
+                  orderBusy || receiptBusy || (payMethod === "cash" &&
+                  (givenPence === null || givenPence < amountDuePence))
                 }
                 onClick={() => void submit()}
               >
-                Submit Order
+                {orderBusy ? "Saving order…" : "Submit Order"}
               </button>
             </div>
           </div>
@@ -1863,10 +1895,11 @@ export default function PosApp() {
                     .then((result) =>
                       setPrinterMessage(
                         result.ok
-                          ? "Test receipt sent successfully."
+                          ? "Test job accepted by the printer. Check that END OF TEST RECEIPT is visible."
                           : result.error || "Test print failed.",
                       ),
                     )
+                    .catch((error) => setPrinterMessage(`Test print failed: ${error instanceof Error ? error.message : "Printer unavailable"}`))
                     .finally(() => setPrinterBusy(false));
                 }}
                 className="min-h-12 rounded-xl border border-[#00955e]/50 bg-[#00955e]/10 px-4 text-sm font-semibold text-[#49d69d] disabled:opacity-40"
@@ -1893,6 +1926,7 @@ export default function PosApp() {
                         setPrinterMessage(result.error || "Could not save printer.");
                       }
                     })
+                    .catch((error) => setPrinterMessage(`Could not save printer: ${error instanceof Error ? error.message : "Printer unavailable"}`))
                     .finally(() => setPrinterBusy(false));
                 }}
                 className="min-h-12 rounded-xl bg-[#00955e] px-4 text-sm font-bold text-white shadow-[var(--tryo-glow)] disabled:opacity-40"

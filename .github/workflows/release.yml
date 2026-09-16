@@ -33,6 +33,9 @@ jobs:
       - name: Build Windows installer
         run: npm run electron:dist -- --win --x64 --publish never
 
+      - name: Verify receipt layout and Windows spooler bridge
+        run: npm run test:receipt
+
       - name: Keep installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -50,13 +53,15 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
-          ### Receipt printer fix (v0.1.1)
-          - Fixes Windows silent printing reporting success while outputting blank 80mm receipts (Electron/Chromium page-size regression).
-          - Order and **Reprint last** now wait for receipt layout before sending the print job.
+          ### Receipt printing
+          - Sends Windows receipts as ESC/POS raster jobs through the RAW spooler, including Generic / Text Only queues such as POS-80.
+          - Feeds the paper past the print head after every receipt, then cuts (printers without a cutter ignore the cut).
+          - Test prints, orders and reprints use the same receipt-only rendering pipeline; no ready-signal race.
+          - Displays order-saving and printing failures and blocks duplicate clicks.
 
           ### Setup
           1. Download and run the `.exe` installer.
-          2. Install the receipt printer's Windows driver and confirm it appears in Windows Settings > Printers & scanners.
+          2. Connect an 80mm ESC/POS-compatible thermal printer and confirm its queue appears in Windows Settings > Printers & scanners. Generic / Text Only is supported.
           3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
           4. Save the printer. Completed orders then print silently and **Reprint last** remains available.
 

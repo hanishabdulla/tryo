@@ -1,6 +1,6 @@
 {
   "name": "tryo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Tryo takeaway point of sale",
   "author": "Tryo",
@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:receipt": "cross-env ELECTRON_RUN_AS_NODE= electron electron/receipt-print.test.cjs",
     "electron:dev": "concurrently -k \"next dev -p 43123\" \"wait-on http://127.0.0.1:43123 && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=1 electron .\"",
     "electron:start": "npm run build && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=0 electron .",
     "electron:pack": "npm run build && electron-builder --dir",
@@ -47,6 +48,7 @@
     },
     "files": [
       "electron/**/*",
+      "!electron/**/*.test.cjs",
       "package.json",
       "!node_modules/**/*"
     ],
