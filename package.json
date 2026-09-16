@@ -1,6 +1,6 @@
 {
   "name": "tryo",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "Tryo takeaway point of sale",
   "author": "Tryo",
@@ -45,7 +45,8 @@
     "productName": "Tryo POS",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "resources"
     },
     "files": [
       "electron/**/*",
