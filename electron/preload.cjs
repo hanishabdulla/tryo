@@ -11,7 +11,18 @@ contextBridge.exposeInMainWorld("tryoElectron", {
   testReceiptPrinter: (deviceName) =>
     ipcRenderer.invoke("print:testReceiptPrinter", deviceName),
   /** Print the current window (uses #receipt-print-root @media print CSS). */
-  printReceiptSilent: () => ipcRenderer.invoke("receipt-print-silent"),
+  printReceiptSilent: () => {
+    const result = ipcRenderer.invoke("receipt-print-silent");
+    queueMicrotask(() => ipcRenderer.send("receipt-print-content-ready"));
+    return result;
+  },
+});
+
+contextBridge.exposeInMainWorld("tryoReceiptPrint", {
+  /** Call when #receipt-print-root has been painted for the current order. */
+  signalReady: () => {
+    ipcRenderer.send("receipt-print-content-ready");
+  },
 });
 
 contextBridge.exposeInMainWorld("tryoMenuPrint", {

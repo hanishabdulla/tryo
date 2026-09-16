@@ -83,21 +83,90 @@ function receiptPrinterName() {
   ).trim();
 }
 
+/** 80 mm receipt width in microns (Chromium print API). */
+const RECEIPT_PAGE_WIDTH_MICRONS = 80_000;
+
+function buildSilentPrintOptions(deviceName) {
+  const options = {
+    silent: true,
+    printBackground: true,
+    deviceName,
+    margins: { marginType: "none" },
+    copies: 1,
+    color: false,
+  };
+  if (process.platform === "win32") {
+    // Windows silent print often spools blank pages without printer roll settings
+    // (electron/electron#41741, #46921). Prefer the device's configured 80 mm size.
+    options.usePrinterDefaultPageSize = true;
+    // Some Windows/Chromium builds skip the job unless scaleFactor is not 100.
+    options.scaleFactor = 99;
+  } else {
+    options.pageSize = {
+      width: RECEIPT_PAGE_WIDTH_MICRONS,
+      height: 300_000,
+    };
+  }
+  return options;
+}
+
+async function waitForPrintableContent(webContents, win) {
+  if (webContents.isLoading()) {
+    await new Promise((resolve) =>
+      webContents.once("did-finish-load", resolve),
+    );
+  }
+  if (win && !win.isDestroyed() && !win.isVisible()) {
+    await Promise.race([
+      new Promise((resolve) => win.once("ready-to-show", resolve)),
+      new Promise((resolve) => setTimeout(resolve, 2_000)),
+    ]);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 150));
+}
+
 function printWebContents(webContents, deviceName) {
+  const printer = typeof deviceName === "string" ? deviceName.trim() : "";
+  if (!printer) {
+    return Promise.resolve({ ok: false, error: "Missing printer name" });
+  }
   return new Promise((resolve) => {
     webContents.print(
-      {
-        silent: true,
-        printBackground: true,
-        deviceName,
-        margins: { marginType: "none" },
-      },
+      buildSilentPrintOptions(printer),
       (success, failureReason) => {
-        resolve({
-          ok: success,
-          error: success ? undefined : failureReason || "Print failed",
-        });
+        if (!success) {
+          resolve({
+            ok: false,
+            error: failureReason || "Print failed",
+          });
+          return;
+        }
+        resolve({ ok: true });
       },
+    );
+  });
+}
+
+function waitForReceiptContentReady(webContents, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      ipcMain.removeListener("receipt-print-content-ready", onReady);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onReady = (event) => {
+      if (event.sender !== webContents) return;
+      if (!isTrustedSender(event.senderFrame)) return;
+      finish();
+    };
+    ipcMain.on("receipt-print-content-ready", onReady);
+    const timeoutId = setTimeout(
+      () => finish(new Error("Timeout waiting for receipt content")),
+      timeoutMs,
     );
   });
 }
@@ -126,6 +195,7 @@ async function printTestReceipt(deviceName) {
 
   try {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    await waitForPrintableContent(win.webContents, win);
     return await printWebContents(win.webContents, deviceName);
   } finally {
     if (!win.isDestroyed()) win.close();
@@ -266,6 +336,16 @@ function setupPrintIpc() {
     if (!win) return { ok: false, error: "No window" };
     const printer = receiptPrinterName();
     if (!printer) return { ok: false, error: "Missing printer name" };
+    try {
+      await waitForReceiptContentReady(event.sender, 15_000);
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "Receipt not ready to print",
+      };
+    }
+    await waitForPrintableContent(win.webContents, win);
     return printWebContents(win.webContents, printer);
   });
 
@@ -314,19 +394,21 @@ function setupPrintIpc() {
         }
         contentReadyFired = true;
         const deviceName = (process.env.ELECTRON_MENU_PRINTER || "").trim();
-        win.webContents.print(
-          {
-            silent: Boolean(deviceName),
-            printBackground: true,
-            deviceName: deviceName || undefined,
-          },
-          (success, failureReason) => {
+        void waitForPrintableContent(win.webContents, win).then(() => {
+          const printOptions = deviceName
+            ? buildSilentPrintOptions(deviceName)
+            : {
+                silent: false,
+                printBackground: true,
+                margins: { marginType: "none" },
+              };
+          win.webContents.print(printOptions, (success, failureReason) => {
             finish({
               ok: success,
               error: success ? undefined : failureReason || "Print failed",
             });
-          },
-        );
+          });
+        });
       };
 
       ipcMain.on("menu-print-content-ready", onContentReady);

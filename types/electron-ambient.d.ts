@@ -22,6 +22,9 @@ declare global {
     tryoMenuPrint?: {
       signalReady: () => void;
     };
+    tryoReceiptPrint?: {
+      signalReady: () => void;
+    };
   }
 }
 

@@ -307,8 +307,7 @@ export default function PosApp() {
     if (!receipt) return;
     if (printedOrderRef.current === receipt.orderNumber) return;
     printedOrderRef.current = receipt.orderNumber;
-    const frame = requestAnimationFrame(() => void printCurrentReceipt());
-    return () => cancelAnimationFrame(frame);
+    void printCurrentReceipt();
   }, [printCurrentReceipt, receipt]);
 
   const cartSubtotalPence = useMemo(
