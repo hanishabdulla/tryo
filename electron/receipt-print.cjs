@@ -3,17 +3,17 @@ const { encodeReceipt } = require('./escpos.cjs');
 const { sendRawReceipt } = require('./windows-raw.cjs');
 
 // Copy only the rendered receipt, not the POS viewport, modals or scroll areas.
-async function captureReceipt(contents) {
+async function captureReceipt(contents, selector = '.receipt-paper') {
   return contents.executeJavaScript(`(async () => {
     await document.fonts.ready;
-    const source = document.querySelector('#receipt-print-root .receipt-paper');
+    const source = document.querySelector('#receipt-print-root ${selector}');
     if (!source || !source.textContent.trim()) throw new Error('No receipt is available to print.');
     const clone = source.cloneNode(true);
     const originals = [source, ...source.querySelectorAll('*')];
     const copies = [clone, ...clone.querySelectorAll('*')];
     const properties = ['display','font-size','font-weight','line-height','text-align',
       'text-transform','white-space','overflow-wrap','padding','margin','border',
-      'border-top','border-bottom','width','height','max-width','box-sizing',
+      'border-top','border-bottom','max-width','box-sizing',
       'flex','flex-direction','flex-shrink','justify-content','align-items','gap'];
     originals.forEach((node, i) => {
       const computed = getComputedStyle(node);

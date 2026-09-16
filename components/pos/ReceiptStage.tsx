@@ -47,6 +47,49 @@ function formatReceiptTimestamp(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+function formatTicketTime(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => n.toString().padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Short prep ticket for the kitchen: items and options only, no prices. */
+function KitchenTicket({ data }: { data: ReceiptPayload }) {
+  return (
+    <div className="kitchen-ticket font-mono text-[13px] leading-snug text-black">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[22px] font-bold">#{data.orderNumber}</span>
+        <span className="text-[16px] font-bold">{formatTicketTime(data.createdAt)}</span>
+      </div>
+      <div className="font-semibold uppercase">Kitchen · Takeaway</div>
+      <div className="my-2 border-t-2 border-black" />
+      {data.lines.map((line, idx) => (
+        <div key={`${line.name}-${idx}`} className="mb-2">
+          <div className="text-[16px] font-bold uppercase">
+            {line.quantity} x {line.name}
+          </div>
+          {line.isMeal && line.mealLabel ? (
+            <div className="pl-4">+ {line.mealLabel}</div>
+          ) : null}
+          {line.seasoning && line.seasoning !== "None" ? (
+            <div className="pl-4">Seasoning: {line.seasoning}</div>
+          ) : null}
+          {line.sauce && line.sauce !== "None" ? (
+            <div className="pl-4">Sauce: {line.sauce}</div>
+          ) : null}
+          {line.addonLines?.map((ad) => (
+            <div key={ad.name} className="pl-4 uppercase">
+              + {ad.name}
+            </div>
+          ))}
+        </div>
+      ))}
+      <div className="my-2 border-t-2 border-black" />
+      <div className="font-semibold">Total item(s): {data.totalItemCount}</div>
+    </div>
+  );
+}
+
 export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
   return (
     <div id="receipt-print-root" className="receipt-stage" aria-hidden={!data}>
@@ -148,6 +191,7 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
         <div className="text-center">Served by: Staff</div>
         </div>
       ) : null}
+      {data ? <KitchenTicket data={data} /> : null}
     </div>
   );
 }

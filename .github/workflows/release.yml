@@ -54,6 +54,8 @@ jobs:
           ## Tryo POS for Windows
 
           ### Receipt printing
+          - Each submitted order prints a short kitchen ticket (order number, time, items and options, no prices) followed by the customer receipt. **Reprint last** reprints both.
+          - Fixes overlapping total lines on the customer receipt.
           - Sends Windows receipts as ESC/POS raster jobs through the RAW spooler, including Generic / Text Only queues such as POS-80.
           - Feeds the paper past the print head after every receipt, then cuts (printers without a cutter ignore the cut).
           - Test prints, orders and reprints use the same receipt-only rendering pipeline; no ready-signal race.

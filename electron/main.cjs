@@ -228,8 +228,16 @@ function setupPrintIpc() {
     const printer = receiptPrinterName();
     if (!printer) return { ok: false, error: "Missing printer name" };
     try {
-      const markup = await captureReceipt(event.sender);
-      return await printReceipt(markup, printer);
+      // Kitchen ticket first so preparation starts while the customer copy prints.
+      const kitchen = await captureReceipt(event.sender, ".kitchen-ticket");
+      const customer = await captureReceipt(event.sender, ".receipt-paper");
+      const kitchenResult = await printReceipt(kitchen, printer);
+      const customerResult = await printReceipt(customer, printer);
+      const errors = [
+        kitchenResult.ok ? "" : `Kitchen ticket: ${kitchenResult.error}`,
+        customerResult.ok ? "" : `Customer receipt: ${customerResult.error}`,
+      ].filter(Boolean);
+      return errors.length ? { ok: false, error: errors.join(" ") } : { ok: true };
     } catch (error) {
       return {
         ok: false,

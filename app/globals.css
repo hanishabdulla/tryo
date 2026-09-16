@@ -40,7 +40,8 @@ body {
   pointer-events: none;
 }
 
-.receipt-paper {
+.receipt-paper,
+.kitchen-ticket {
   width: 72mm;
   padding: 8mm 4mm;
   background: white;
