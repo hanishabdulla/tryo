@@ -34,6 +34,19 @@ export default defineSchema({
     value: v.number(),
   }).index("by_name", ["name"]),
 
+  // Dashboard password: PBKDF2 hash only, never the plain password.
+  dashboardPassword: defineTable({
+    salt: v.string(),
+    hash: v.string(),
+    iterations: v.number(),
+  }),
+
+  // Signed-in dashboard sessions. Only a SHA-256 of each token is stored.
+  dashboardSessions: defineTable({
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+  }).index("by_tokenHash", ["tokenHash"]),
+
   orders: defineTable({
     orderNumber: v.number(),
     createdAt: v.number(),

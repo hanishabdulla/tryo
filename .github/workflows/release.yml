@@ -53,6 +53,9 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
+          ### Dashboard
+          - The dashboard password is now stored securely in Convex. No `.env` file is needed on the till.
+
           ### Receipt printing
           - Each submitted order prints a short kitchen ticket (order number, time, items and options, no prices) followed by the customer receipt. **Reprint last** reprints both.
           - Fixes overlapping total lines on the customer receipt.

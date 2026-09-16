@@ -10,12 +10,17 @@ Create `.env.local` before running the app:
 
 ```dotenv
 NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
-DASHBOARD_PASSWORD=replace-me
-DASHBOARD_SESSION_SECRET=use-a-long-random-value
 
 # Optional exact system printer names for silent printing:
 ELECTRON_RECEIPT_PRINTER=EML POS-80C
 ELECTRON_MENU_PRINTER=EML POS-80C
+```
+
+The dashboard password is stored in Convex as a salted hash. Set or change it
+with (this also signs out every dashboard session):
+
+```bash
+npx convex run dashboardAuth:setPassword '{"password":"new-password"}'
 ```
 
 Start Convex in one terminal, then Electron in another:

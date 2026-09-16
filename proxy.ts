@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyDashboardToken } from "@/lib/dashboard-verify-edge";
+import { DASHBOARD_COOKIE, isDashboardSessionValid } from "@/lib/dashboard-session";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,17 +13,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const secret =
-    process.env.DASHBOARD_SESSION_SECRET || process.env.DASHBOARD_PASSWORD || "";
-  if (!secret || !process.env.DASHBOARD_PASSWORD) {
+  let ok = false;
+  try {
+    ok = await isDashboardSessionValid(request.cookies.get(DASHBOARD_COOKIE)?.value);
+  } catch {
     return new NextResponse(
-      "Dashboard auth is not configured. Set DASHBOARD_PASSWORD in the environment.",
+      "Could not reach the server to check your dashboard session. Check the internet connection and reload.",
       { status: 503 },
     );
   }
-
-  const token = request.cookies.get("tryo_dashboard_sess")?.value;
-  const ok = await verifyDashboardToken(token, secret);
   if (!ok) {
     const login = new URL("/dashboard/login", request.url);
     login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
