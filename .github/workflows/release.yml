@@ -53,6 +53,10 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
+          ### Menu
+          - New Tryo menu with item descriptions. Categories and meal upgrades come from Convex.
+          - Dashboard → Menu: add, edit, hide, reorder and delete items and categories, and set the meal upgrade price.
+
           ### Dashboard
           - The dashboard password is now stored securely in Convex. No `.env` file is needed on the till.
 

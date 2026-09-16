@@ -3,13 +3,13 @@
 import { useQuery } from "convex/react";
 import { useEffect, useMemo } from "react";
 import { ConvexClientProvider } from "@/components/convex-client-provider";
-import { CATEGORIES } from "@/lib/categories";
 import { api } from "@/lib/convex-api";
 import { formatPence } from "@/lib/money";
 
 type MenuPrintRow = {
   category: string;
   name: string;
+  description: string;
   basePrice: number;
   sortOrder: number;
 };
@@ -17,6 +17,9 @@ type MenuPrintRow = {
 function MenuPrintBody() {
   const items = useQuery(api.menu.listAllMenuItemsForPrint, {});
   const config = useQuery(api.menu.getMenuConfig, {});
+  const categories = useQuery(api.menu.listCategories, {}) as
+    | { name: string }[]
+    | undefined;
 
   const businessName =
     typeof config?.businessName === "string" ? config.businessName : "Tryo";
@@ -35,32 +38,30 @@ function MenuPrintBody() {
     const ordered: { label: string; category: string; rows: MenuPrintRow[] }[] =
       [];
     const seen = new Set<string>();
-    for (const c of CATEGORIES) {
-      const key = c.convexCategory;
-      if (!key) continue;
-      const rows = byCat.get(key);
+    for (const { name } of categories ?? []) {
+      const rows = byCat.get(name);
       if (!rows?.length) continue;
-      ordered.push({ label: c.label, category: key, rows });
-      seen.add(key);
+      ordered.push({ label: name, category: name, rows });
+      seen.add(name);
     }
     for (const [category, rows] of byCat) {
       if (seen.has(category) || !rows.length) continue;
       ordered.push({ label: category, category, rows });
     }
     return ordered;
-  }, [items]);
+  }, [categories, items]);
 
   useEffect(() => {
-    if (items === undefined) return;
+    if (items === undefined || categories === undefined) return;
     const id = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         window.tryoMenuPrint?.signalReady();
       });
     });
     return () => cancelAnimationFrame(id);
-  }, [items]);
+  }, [categories, items]);
 
-  if (items === undefined) {
+  if (items === undefined || categories === undefined) {
     return (
       <div className="menu-print-inner p-4 font-mono text-sm text-black">
         Loading menu…
@@ -87,12 +88,17 @@ function MenuPrintBody() {
               {sec.rows.map((r) => (
                 <li
                   key={`${sec.category}-${r.name}`}
-                  className="flex justify-between gap-2 text-[11px] leading-tight"
+                  className="text-[11px] leading-tight"
                 >
-                  <span className="min-w-0 flex-1 uppercase">{r.name}</span>
-                  <span className="shrink-0 font-semibold">
-                    {formatPence(r.basePrice)}
-                  </span>
+                  <div className="flex justify-between gap-2">
+                    <span className="min-w-0 flex-1 uppercase">{r.name}</span>
+                    <span className="shrink-0 font-semibold">
+                      {formatPence(r.basePrice)}
+                    </span>
+                  </div>
+                  {r.description ? (
+                    <div className="text-[10px]">{r.description}</div>
+                  ) : null}
                 </li>
               ))}
             </ul>

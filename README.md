@@ -23,6 +23,9 @@ with (this also signs out every dashboard session):
 npx convex run dashboardAuth:setPassword '{"password":"new-password"}'
 ```
 
+The menu (categories, items, meal upgrade) is edited in **Dashboard → Menu**.
+`npx convex run seed:replaceMenu` wipes it and reloads the menu in `convex/seed.ts`.
+
 Start Convex in one terminal, then Electron in another:
 
 ```bash

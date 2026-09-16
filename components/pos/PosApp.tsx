@@ -4,23 +4,10 @@ import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/convex-api";
-import { CATEGORIES, type CategoryDef } from "@/lib/categories";
 import {
   computePaymentDiscountPence,
   parsePercentDiscountInput,
 } from "@/lib/discount";
-import {
-  HOT_DOG_CHEESE_PRICE_PENCE,
-  HOT_DOG_ONION_OPTIONS,
-  HOT_DOG_ONION_PRICE_PENCE,
-  hotDogCartLineKey,
-  hotDogExtrasPence,
-  isHotDogSheet,
-} from "@/lib/hot-dog";
-import {
-  isLoadedFriesSheet,
-  loadedFriesCartLineKey,
-} from "@/lib/loaded-fries";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 import {
   ReceiptStage,
@@ -31,34 +18,28 @@ import {
 type MenuRow = {
   _id: string;
   name: string;
+  description?: string;
   basePrice: number;
 };
 
-type MenuItemDoc = {
+type MenuCategory = {
   _id: string;
   name: string;
-  basePrice: number;
+  mealUpgrade: boolean;
 };
 
 type CartLine = {
   lineKey: string;
   itemName: string;
   sourceCategory: string;
+  /** Category offered "Make it a meal" when the line was added. */
+  mealEligible: boolean;
   isMeal: boolean;
   mealLabel: string | null;
   basePricePence: number;
   mealUpchargePence: number;
   unitPricePence: number;
   quantity: number;
-  /** Loaded Fries only */
-  seasoning?: string | null;
-  addons?: string[];
-  loadedFriesAddonUnitPence?: number;
-  /** Loaded Fries — free sauce choice */
-  sauce?: string | null;
-  /** Hot Dog — mutually exclusive onion choice ("None" = no onion topping) */
-  hotDogOnion?: string | null;
-  hotDogCheese?: boolean;
 };
 
 function lineKey(itemName: string, isMeal: boolean) {
@@ -90,58 +71,33 @@ function useMenuConfigMap() {
   return useQuery(api.menu.getMenuConfig, {});
 }
 
-function useCategoryMenuItems(activeCategory: CategoryDef | null) {
-  const category = activeCategory?.convexCategory;
-  return useQuery(
-    api.menu.listItemsByCategory,
-    category ? { category } : "skip",
-  );
-}
-
 export default function PosApp() {
-  const [activeCategoryId, setActiveCategoryId] = useState(
-    () => CATEGORIES.find((c) => c.convexCategory)?.id ?? CATEGORIES[0].id,
-  );
+  const categories = useQuery(api.menu.listCategories, {}) as
+    | MenuCategory[]
+    | undefined;
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const activeCategory =
-    CATEGORIES.find((c) => c.id === activeCategoryId) ?? CATEGORIES[0];
+    categories?.find((c) => c.name === selectedCategory) ?? categories?.[0] ?? null;
 
   const config = useMenuConfigMap();
-  const categoryMenuItems = useCategoryMenuItems(activeCategory);
+  const categoryMenuItems = useQuery(
+    api.menu.listItemsByCategory,
+    activeCategory ? { category: activeCategory.name } : "skip",
+  );
 
-  const mealEligible =
-    activeCategory.convexCategory === "Burgers" ||
-    activeCategory.convexCategory === "Wraps";
+  const mealEligible = activeCategory?.mealUpgrade ?? false;
 
-  const seedDb = useMutation(api.seed.seed);
   const submitOrder = useMutation(api.orders.submitOrder);
-  const addMenuItemMutation = useMutation(api.menu.addMenuItem);
-
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
-    seededRef.current = true;
-    void seedDb({});
-  }, [seedDb]);
 
   const mealUpchargePence = useMemo(() => {
     const v = config?.mealUpcharge;
-    return typeof v === "number" && Number.isFinite(v) ? v : 249;
+    return typeof v === "number" && Number.isFinite(v) ? v : 299;
   }, [config]);
 
-  const mealComboLabel = useMemo(() => {
+  const activeMealComboLabel = useMemo(() => {
     const v = config?.mealComboLabel;
-    return typeof v === "string" && v.length > 0 ? v : "Fries + Coke";
-  }, [config]);
-
-  const mealComboLabelWraps = useMemo(() => {
-    const v = config?.mealComboLabelWraps;
     return typeof v === "string" && v.length > 0 ? v : "Fries + Drink";
   }, [config]);
-
-  const activeMealComboLabel =
-    activeCategory.convexCategory === "Wraps"
-      ? mealComboLabelWraps
-      : mealComboLabel;
 
   const businessName =
     typeof config?.businessName === "string" ? config.businessName : "Tryo";
@@ -160,73 +116,14 @@ export default function PosApp() {
       ? config.receiptQrUrl
       : "https://www.tryoeats.uk/";
 
-  const loadedFriesAddonPricePence = useMemo(() => {
-    const v = config?.loadedFriesAddonPricePence;
-    return typeof v === "number" && Number.isFinite(v) ? v : 299;
-  }, [config]);
-
-  const loadedFriesSeasonings = useMemo((): string[] => {
-    const v = config?.loadedFriesSeasonings;
-    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
-      return v as string[];
-    }
-    return ["Cajun", "Peri-Peri", "None"];
-  }, [config]);
-
-  const loadedFriesAddonsList = useMemo((): string[] => {
-    const v = config?.loadedFriesAddons;
-    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
-      return v as string[];
-    }
-    return [
-      "Spicy Chicken",
-      "Southern Fried Chicken",
-      "Angus Beef",
-      "Beef",
-      "Falafel",
-    ];
-  }, [config]);
-
-  const loadedFriesSauces = useMemo((): string[] => {
-    const v = config?.loadedFriesSauces;
-    if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
-      return v as string[];
-    }
-    return [
-      "None",
-      "Mayo",
-      "Burger sauce",
-      "Ketchup",
-      "Barbecue",
-      "Chipotle",
-      "Garlic mayo",
-    ];
-  }, [config]);
-
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [sheetItem, setSheetItem] = useState<MenuRow | null>(null);
   const [sheetMeal, setSheetMeal] = useState(false);
   const [sheetQty, setSheetQty] = useState(1);
-  const [lfSeasoning, setLfSeasoning] = useState("None");
-  const [lfSauce, setLfSauce] = useState("None");
-  const [lfAddons, setLfAddons] = useState<string[]>([]);
-  const [hdOnion, setHdOnion] = useState("None");
-  const [hdCheese, setHdCheese] = useState(false);
-
   const [customItemOpen, setCustomItemOpen] = useState(false);
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPriceRaw, setCustomItemPriceRaw] = useState("");
-
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [addMenuStep, setAddMenuStep] = useState<"category" | "details">(
-    "category",
-  );
-  const [addMenuCategory, setAddMenuCategory] = useState<string | null>(null);
-  const [addMenuName, setAddMenuName] = useState("");
-  const [addMenuPriceRaw, setAddMenuPriceRaw] = useState("");
-  const [addMenuSaving, setAddMenuSaving] = useState(false);
-  const [addMenuError, setAddMenuError] = useState<string | null>(null);
 
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
@@ -359,97 +256,14 @@ export default function PosApp() {
   const changeShort =
     payMethod === "cash" && givenPence !== null && givenPence < amountDuePence;
 
-  const openItemSheet = useCallback(
-    (item: MenuRow) => {
-      setSheetItem(item);
-      setSheetMeal(false);
-      setSheetQty(1);
-      if (isLoadedFriesSheet(item, activeCategory.convexCategory)) {
-        setLfSeasoning("None");
-        setLfSauce("None");
-        setLfAddons([]);
-      }
-      if (isHotDogSheet(item, activeCategory.convexCategory)) {
-        setHdOnion("None");
-        setHdCheese(false);
-      }
-    },
-    [activeCategory.convexCategory],
-  );
+  const openItemSheet = useCallback((item: MenuRow) => {
+    setSheetItem(item);
+    setSheetMeal(false);
+    setSheetQty(1);
+  }, []);
 
   const addFromSheet = useCallback(() => {
-    if (!sheetItem) return;
-    if (isLoadedFriesSheet(sheetItem, activeCategory.convexCategory)) {
-      const addonUnit = loadedFriesAddonPricePence;
-      const n = lfAddons.length;
-      const unit = sheetItem.basePrice + n * addonUnit;
-      const key = loadedFriesCartLineKey(lfSeasoning, lfSauce, lfAddons);
-      setCart((prev) => {
-        const idx = prev.findIndex((l) => l.lineKey === key);
-        if (idx === -1) {
-          return [
-            ...prev,
-            {
-              lineKey: key,
-              itemName: sheetItem.name,
-              sourceCategory: activeCategory.convexCategory ?? "",
-              isMeal: false,
-              mealLabel: null,
-              basePricePence: sheetItem.basePrice,
-              mealUpchargePence: n * addonUnit,
-              unitPricePence: unit,
-              quantity: sheetQty,
-              seasoning: lfSeasoning,
-              sauce: lfSauce,
-              addons: [...lfAddons],
-              loadedFriesAddonUnitPence: addonUnit,
-            },
-          ];
-        }
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          quantity: next[idx].quantity + sheetQty,
-        };
-        return next;
-      });
-      setSheetItem(null);
-      return;
-    }
-    if (isHotDogSheet(sheetItem, activeCategory.convexCategory)) {
-      const extras = hotDogExtrasPence(hdOnion, hdCheese);
-      const unit = sheetItem.basePrice + extras;
-      const key = hotDogCartLineKey(hdOnion, hdCheese);
-      setCart((prev) => {
-        const idx = prev.findIndex((l) => l.lineKey === key);
-        if (idx === -1) {
-          return [
-            ...prev,
-            {
-              lineKey: key,
-              itemName: sheetItem.name,
-              sourceCategory: activeCategory.convexCategory ?? "",
-              isMeal: false,
-              mealLabel: null,
-              basePricePence: sheetItem.basePrice,
-              mealUpchargePence: extras,
-              unitPricePence: unit,
-              quantity: sheetQty,
-              hotDogOnion: hdOnion,
-              hotDogCheese: hdCheese,
-            },
-          ];
-        }
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          quantity: next[idx].quantity + sheetQty,
-        };
-        return next;
-      });
-      setSheetItem(null);
-      return;
-    }
+    if (!sheetItem || !activeCategory) return;
     const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
     const unit = sheetItem.basePrice + up;
@@ -463,7 +277,8 @@ export default function PosApp() {
           {
             lineKey: key,
             itemName: sheetItem.name,
-            sourceCategory: activeCategory.convexCategory ?? "",
+            sourceCategory: activeCategory.name,
+            mealEligible,
             isMeal,
             mealLabel: label,
             basePricePence: sheetItem.basePrice,
@@ -482,14 +297,8 @@ export default function PosApp() {
     });
     setSheetItem(null);
   }, [
-    activeCategory.convexCategory,
+    activeCategory,
     activeMealComboLabel,
-    hdCheese,
-    hdOnion,
-    lfAddons,
-    lfSauce,
-    lfSeasoning,
-    loadedFriesAddonPricePence,
     mealEligible,
     mealUpchargePence,
     sheetItem,
@@ -533,6 +342,7 @@ export default function PosApp() {
             lineKey: key,
             itemName: name,
             sourceCategory: "Custom",
+            mealEligible: false,
             isMeal: false,
             mealLabel: null,
             basePricePence: price,
@@ -553,49 +363,6 @@ export default function PosApp() {
     setCustomItemName("");
     setCustomItemPriceRaw("");
   }, [customItemName, customItemPriceRaw]);
-
-  const onCategoryTap = useCallback((cat: CategoryDef) => {
-    setActiveCategoryId(cat.id);
-  }, []);
-
-  const openAddMenu = useCallback(() => {
-    setAddMenuOpen(true);
-    setAddMenuStep("category");
-    setAddMenuCategory(null);
-    setAddMenuName("");
-    setAddMenuPriceRaw("");
-    setAddMenuError(null);
-  }, []);
-
-  const addMenuPricePence = parsePenceFromInput(addMenuPriceRaw);
-  const canSaveAddMenu =
-    addMenuCategory !== null &&
-    addMenuName.trim().length > 0 &&
-    addMenuPricePence !== null &&
-    addMenuPricePence >= 0;
-
-  const saveAddMenuItem = useCallback(async () => {
-    if (!addMenuCategory) return;
-    const name = addMenuName.trim().slice(0, 200);
-    const pence = parsePenceFromInput(addMenuPriceRaw);
-    if (!name || pence === null || pence < 0) return;
-    setAddMenuSaving(true);
-    setAddMenuError(null);
-    try {
-      await addMenuItemMutation({
-        category: addMenuCategory,
-        name,
-        basePrice: pence,
-      });
-      setAddMenuOpen(false);
-      const cat = CATEGORIES.find((c) => c.convexCategory === addMenuCategory);
-      if (cat) setActiveCategoryId(cat.id);
-    } catch (e) {
-      setAddMenuError(e instanceof Error ? e.message : "Could not save item");
-    } finally {
-      setAddMenuSaving(false);
-    }
-  }, [addMenuCategory, addMenuItemMutation, addMenuName, addMenuPriceRaw]);
 
   const onTileTap = useCallback(
     (item: MenuRow) => {
@@ -627,32 +394,14 @@ export default function PosApp() {
       }
     }
 
-    const items = cart.map((l) => {
-      const row = {
-        itemName: l.itemName,
-        isMeal: l.isMeal,
-        mealLabel: l.mealLabel,
-        unitPrice: l.unitPricePence,
-        quantity: l.quantity,
-        lineTotal: l.unitPricePence * l.quantity,
-      };
-      if (l.itemName === "Loaded Fries") {
-        return {
-          ...row,
-          seasoning: l.seasoning ?? "None",
-          sauce: l.sauce ?? "None",
-          addons: l.addons ?? [],
-        };
-      }
-      if (l.itemName === "Hot Dog") {
-        return {
-          ...row,
-          hotDogOnion: l.hotDogOnion ?? "None",
-          hotDogCheese: l.hotDogCheese ?? false,
-        };
-      }
-      return row;
-    });
+    const items = cart.map((l) => ({
+      itemName: l.itemName,
+      isMeal: l.isMeal,
+      mealLabel: l.mealLabel,
+      unitPrice: l.unitPricePence,
+      quantity: l.quantity,
+      lineTotal: l.unitPricePence * l.quantity,
+    }));
 
     if (orderInFlight.current) return;
     orderInFlight.current = true;
@@ -677,59 +426,14 @@ export default function PosApp() {
       setOrderBusy(false);
     }
 
-    const lines: ReceiptLinePrint[] = cart.map((l) => {
-      if (l.itemName === "Loaded Fries") {
-        const addonUnit =
-          l.loadedFriesAddonUnitPence ?? loadedFriesAddonPricePence;
-        return {
-          name: l.itemName,
-          quantity: l.quantity,
-          baseLineTotalPence: l.basePricePence * l.quantity,
-          isMeal: false,
-          mealLabel: null,
-          mealLineTotalPence: 0,
-          seasoning: l.seasoning ?? "None",
-          sauce: l.sauce ?? "None",
-          addonLines: (l.addons ?? []).map((name) => ({
-            name,
-            lineTotalPence: addonUnit * l.quantity,
-          })),
-        };
-      }
-      if (l.itemName === "Hot Dog") {
-        const onion = l.hotDogOnion ?? "None";
-        const addonLines: { name: string; lineTotalPence: number }[] = [];
-        if (onion !== "None") {
-          addonLines.push({
-            name: onion,
-            lineTotalPence: HOT_DOG_ONION_PRICE_PENCE * l.quantity,
-          });
-        }
-        if (l.hotDogCheese) {
-          addonLines.push({
-            name: "Cheese",
-            lineTotalPence: HOT_DOG_CHEESE_PRICE_PENCE * l.quantity,
-          });
-        }
-        return {
-          name: l.itemName,
-          quantity: l.quantity,
-          baseLineTotalPence: l.basePricePence * l.quantity,
-          isMeal: false,
-          mealLabel: null,
-          mealLineTotalPence: 0,
-          addonLines: addonLines.length > 0 ? addonLines : undefined,
-        };
-      }
-      return {
-        name: l.itemName,
-        quantity: l.quantity,
-        baseLineTotalPence: l.basePricePence * l.quantity,
-        isMeal: l.isMeal,
-        mealLabel: l.mealLabel,
-        mealLineTotalPence: l.isMeal ? l.mealUpchargePence * l.quantity : 0,
-      };
-    });
+    const lines: ReceiptLinePrint[] = cart.map((l) => ({
+      name: l.itemName,
+      quantity: l.quantity,
+      baseLineTotalPence: l.basePricePence * l.quantity,
+      isMeal: l.isMeal,
+      mealLabel: l.mealLabel,
+      mealLineTotalPence: l.isMeal ? l.mealUpchargePence * l.quantity : 0,
+    }));
 
     setReceipt({
       orderNumber: res.orderNumber,
@@ -770,22 +474,13 @@ export default function PosApp() {
     discountKind,
     discountRaw,
     givenPence,
-    loadedFriesAddonPricePence,
     payMethod,
     qrUrl,
     submitOrder,
     totalItemCount,
   ]);
 
-  const itemsForGrid: MenuRow[] = useMemo(() => {
-    if (!activeCategory.convexCategory) return [];
-    if (!categoryMenuItems) return [];
-    return (categoryMenuItems as MenuItemDoc[]).map((r) => ({
-      _id: r._id,
-      name: r.name,
-      basePrice: r.basePrice,
-    }));
-  }, [activeCategory.convexCategory, categoryMenuItems]);
+  const itemsForGrid = (categoryMenuItems ?? []) as MenuRow[];
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-zinc-950 text-zinc-50">
@@ -805,13 +500,6 @@ export default function PosApp() {
           >
             Dashboard
           </Link>
-          <button
-            type="button"
-            onClick={openAddMenu}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
-          >
-            Add item
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -860,22 +548,22 @@ export default function PosApp() {
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <section className="flex min-h-0 min-w-0 flex-col border-zinc-800 lg:border-r">
           <div className="shrink-0 border-b border-zinc-800 px-3 py-3">
-            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {CATEGORIES.map((cat) => {
-                const active = cat.id === activeCategoryId;
+            <div className="flex flex-wrap gap-2">
+              {(categories ?? []).map((cat) => {
+                const active = cat._id === activeCategory?._id;
                 return (
                   <button
-                    key={cat.id}
+                    key={cat._id}
                     type="button"
-                    onClick={() => onCategoryTap(cat)}
+                    onClick={() => setSelectedCategory(cat.name)}
                     className={[
-                      "min-h-14 shrink-0 rounded-2xl px-5 text-sm font-semibold transition-colors",
+                      "min-h-12 shrink-0 rounded-2xl px-4 text-sm font-semibold transition-colors",
                       active
                         ? "bg-[#00955e] text-white shadow-[var(--tryo-glow)]"
                         : "bg-zinc-900 text-zinc-200",
                     ].join(" ")}
                   >
-                    {cat.label}
+                    {cat.name}
                   </button>
                 );
               })}
@@ -883,14 +571,14 @@ export default function PosApp() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            {categoryMenuItems === undefined ? (
+            {categories === undefined ||
+            (activeCategory && categoryMenuItems === undefined) ? (
               <div className="flex h-full min-h-[240px] items-center justify-center text-zinc-500">
                 Loading menu…
               </div>
             ) : itemsForGrid.length === 0 ? (
               <div className="flex h-full min-h-[240px] items-center justify-center text-zinc-500">
-                No items yet. Open Convex and run the seed mutation once if the
-                menu is empty.
+                No items in this category. Add them in Dashboard → Menu.
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
@@ -901,8 +589,15 @@ export default function PosApp() {
                     onClick={() => onTileTap(item)}
                     className="flex min-h-[88px] flex-col items-start justify-between rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 text-left transition-transform hover:border-[#00955e]/35 hover:shadow-[0_0_24px_-8px_rgba(0,149,94,0.25)] active:scale-[0.98]"
                   >
-                    <span className="text-base font-semibold leading-snug text-white">
-                      {item.name}
+                    <span>
+                      <span className="block text-base font-semibold leading-snug text-white">
+                        {item.name}
+                      </span>
+                      {item.description ? (
+                        <span className="mt-1 line-clamp-2 block text-xs leading-snug text-zinc-500">
+                          {item.description}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="mt-2 text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
                       {formatPence(item.basePrice)}
@@ -956,69 +651,14 @@ export default function PosApp() {
                         <div className="mt-1 text-sm text-zinc-400">
                           {isCustomCartLine(line.lineKey) ? (
                             <span className="text-zinc-400">Custom item</span>
-                          ) : line.itemName === "Loaded Fries" ? (
-                            <div className="space-y-0.5">
-                              <div>
-                                Seasoning:{" "}
-                                <span className="text-zinc-300">
-                                  {line.seasoning ?? "None"}
-                                </span>
-                              </div>
-                              <div>
-                                Sauce:{" "}
-                                <span className="text-zinc-300">
-                                  {line.sauce ?? "None"}
-                                </span>
-                              </div>
-                              {line.addons && line.addons.length > 0 ? (
-                                <div>
-                                  Add-ons:{" "}
-                                  <span className="text-zinc-300">
-                                    {line.addons.join(", ")}
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="text-zinc-500">No add-ons</div>
-                              )}
-                            </div>
-                          ) : line.itemName === "Hot Dog" ? (
-                            <div className="space-y-0.5">
-                              <div>
-                                Onions:{" "}
-                                <span className="text-zinc-300">
-                                  {(line.hotDogOnion ?? "None") === "None"
-                                    ? "None"
-                                    : line.hotDogOnion}
-                                </span>
-                                {(line.hotDogOnion ?? "None") !== "None" ? (
-                                  <span className="text-zinc-500">
-                                    {" "}
-                                    (+{formatPence(HOT_DOG_ONION_PRICE_PENCE)})
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div>
-                                Cheese:{" "}
-                                <span className="text-zinc-300">
-                                  {line.hotDogCheese ? "Yes" : "No"}
-                                </span>
-                                {line.hotDogCheese ? (
-                                  <span className="text-zinc-500">
-                                    {" "}
-                                    (+{formatPence(HOT_DOG_CHEESE_PRICE_PENCE)})
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                          ) : line.isMeal ? (
+                                                    ) : line.isMeal ? (
                             <span>
                               Meal ·{" "}
                               <span className="text-zinc-300">
                                 {line.mealLabel}
                               </span>
                             </span>
-                          ) : line.sourceCategory === "Burgers" ||
-                            line.sourceCategory === "Wraps" ? (
+                          ) : line.mealEligible ? (
                             <span>Individual</span>
                           ) : (
                             <span>Regular</span>
@@ -1120,42 +760,15 @@ export default function PosApp() {
                 >
                   {sheetItem.name}
                 </h2>
-                {isLoadedFriesSheet(sheetItem, activeCategory.convexCategory) ? (
-                  <div className="mt-1 space-y-1">
-                    <p className="text-sm text-zinc-400">
-                      Base {formatPence(sheetItem.basePrice)} · Add-on{" "}
-                      {formatPence(loadedFriesAddonPricePence)} each · No charge
-                      for seasoning or sauce
-                    </p>
-                    <p className="text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
-                      {formatPence(
-                        sheetItem.basePrice +
-                          lfAddons.length * loadedFriesAddonPricePence,
-                      )}{" "}
-                      each
-                    </p>
-                  </div>
-                ) : isHotDogSheet(sheetItem, activeCategory.convexCategory) ? (
-                  <div className="mt-1 space-y-1">
-                    <p className="text-sm text-zinc-400">
-                      Base {formatPence(sheetItem.basePrice)} · Onions{" "}
-                      {formatPence(HOT_DOG_ONION_PRICE_PENCE)} (one choice) ·
-                      Cheese {formatPence(HOT_DOG_CHEESE_PRICE_PENCE)}
-                    </p>
-                    <p className="text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
-                      {formatPence(
-                        sheetItem.basePrice +
-                          hotDogExtrasPence(hdOnion, hdCheese),
-                      )}{" "}
-                      each
-                    </p>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {mealEligible ? "Base " : "Price "}
-                    {formatPence(sheetItem.basePrice)}
+                <p className="mt-1 text-sm text-zinc-400">
+                  {mealEligible ? "Base " : "Price "}
+                  {formatPence(sheetItem.basePrice)}
+                </p>
+                {sheetItem.description ? (
+                  <p className="mt-2 text-sm text-zinc-500">
+                    {sheetItem.description}
                   </p>
-                )}
+                ) : null}
               </div>
               <button
                 type="button"
@@ -1166,145 +779,6 @@ export default function PosApp() {
                 ×
               </button>
             </div>
-
-            {isLoadedFriesSheet(sheetItem, activeCategory.convexCategory) ? (
-              <div className="mt-5 space-y-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                    Seasoning
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {loadedFriesSeasonings.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setLfSeasoning(s)}
-                        className={[
-                          "min-h-14 min-w-[4.5rem] rounded-2xl border px-4 text-sm font-bold",
-                          lfSeasoning === s
-                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                        ].join(" ")}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                    Sauce
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {loadedFriesSauces.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setLfSauce(s)}
-                        className={[
-                          "min-h-14 min-w-[4.5rem] rounded-2xl border px-4 text-sm font-bold",
-                          lfSauce === s
-                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                        ].join(" ")}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                    Add-ons (+{formatPence(loadedFriesAddonPricePence)} each)
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {loadedFriesAddonsList.map((a) => {
-                      const on = lfAddons.includes(a);
-                      return (
-                        <button
-                          key={a}
-                          type="button"
-                          onClick={() =>
-                            setLfAddons((prev) =>
-                              on
-                                ? prev.filter((x) => x !== a)
-                                : [...prev, a],
-                            )
-                          }
-                          className={[
-                            "min-h-14 rounded-2xl border px-4 text-left text-sm font-semibold",
-                            on
-                              ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                              : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                          ].join(" ")}
-                        >
-                          {a}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {isHotDogSheet(sheetItem, activeCategory.convexCategory) ? (
-              <div className="mt-5 space-y-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                    Onions (choose one)
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Caramelized or crispy — not both. None is free.
-                  </p>
-                  <div className="mt-2 flex flex-col gap-2">
-                    {HOT_DOG_ONION_OPTIONS.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setHdOnion(opt)}
-                        className={[
-                          "flex min-h-14 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold",
-                          hdOnion === opt
-                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                        ].join(" ")}
-                      >
-                        <span>{opt}</span>
-                        {opt === "None" ? (
-                          <span className="text-xs font-normal text-zinc-500">
-                            —
-                          </span>
-                        ) : (
-                          <span className="text-xs font-normal text-[#00955e]">
-                            +{formatPence(HOT_DOG_ONION_PRICE_PENCE)}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                    Cheese
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setHdCheese((c) => !c)}
-                    className={[
-                      "mt-2 flex min-h-14 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold",
-                      hdCheese
-                        ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                        : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                    ].join(" ")}
-                  >
-                    <span>Add cheese</span>
-                    <span className="text-xs font-normal text-[#00955e]">
-                      +{formatPence(HOT_DOG_CHEESE_PRICE_PENCE)}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            ) : null}
 
             {mealEligible ? (
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1382,162 +856,6 @@ export default function PosApp() {
                 Add to Cart
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {addMenuOpen ? (
-        <div
-          className="fixed inset-0 z-[46] flex items-end justify-center bg-black/70 p-3 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-menu-title"
-        >
-          <div className="max-h-[min(90dvh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-3">
-              <h2
-                id="add-menu-title"
-                className="text-xl font-bold text-white"
-              >
-                Add item
-              </h2>
-              <button
-                type="button"
-                className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
-                onClick={() => {
-                  setAddMenuOpen(false);
-                  setAddMenuStep("category");
-                  setAddMenuCategory(null);
-                  setAddMenuName("");
-                  setAddMenuPriceRaw("");
-                  setAddMenuError(null);
-                }}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <p className="mt-1 text-sm text-zinc-500">
-              {addMenuStep === "category"
-                ? "Choose a category. The item is saved to your menu and appears on the till and printed menu."
-                : "Name and price in pounds. Burgers and Wraps still use meal options like other items in those categories."}
-            </p>
-
-            {addMenuStep === "category" ? (
-              <>
-                <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {CATEGORIES.filter((c) => c.convexCategory).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 text-left text-sm font-semibold text-white hover:border-[#00955e]/50 hover:bg-zinc-900"
-                      onClick={() => {
-                        setAddMenuCategory(c.convexCategory!);
-                        setAddMenuStep("details");
-                        setAddMenuError(null);
-                      }}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="mt-5 min-h-12 w-full rounded-2xl border border-zinc-700 bg-zinc-950 text-sm font-semibold text-zinc-200 hover:bg-zinc-800"
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    setAddMenuStep("category");
-                    setAddMenuCategory(null);
-                    setAddMenuName("");
-                    setAddMenuPriceRaw("");
-                    setAddMenuError(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <div className="mt-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-300">
-                    Category:{" "}
-                    <span className="text-white">
-                      {CATEGORIES.find((x) => x.convexCategory === addMenuCategory)
-                        ?.label ?? addMenuCategory}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="text-sm font-semibold text-[#00955e] hover:underline"
-                    onClick={() => {
-                      setAddMenuStep("category");
-                      setAddMenuCategory(null);
-                      setAddMenuError(null);
-                    }}
-                  >
-                    Change
-                  </button>
-                </div>
-
-                <label className="mt-5 block text-sm font-semibold text-zinc-300">
-                  Item name
-                </label>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  maxLength={200}
-                  className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
-                  value={addMenuName}
-                  onChange={(e) => setAddMenuName(e.target.value)}
-                  placeholder="e.g. Halloumi wrap"
-                />
-
-                <label className="mt-4 block text-sm font-semibold text-zinc-300">
-                  Price (£)
-                </label>
-                <input
-                  inputMode="decimal"
-                  className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
-                  value={addMenuPriceRaw}
-                  onChange={(e) => setAddMenuPriceRaw(e.target.value)}
-                  placeholder="6.50"
-                />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Type the price in pounds (you can use £ or decimals like 6.5).
-                </p>
-
-                {addMenuError ? (
-                  <p className="mt-3 text-sm font-medium text-red-400">
-                    {addMenuError}
-                  </p>
-                ) : null}
-
-                <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 font-semibold text-white hover:bg-zinc-800"
-                    onClick={() => {
-                      setAddMenuOpen(false);
-                      setAddMenuStep("category");
-                      setAddMenuCategory(null);
-                      setAddMenuName("");
-                      setAddMenuPriceRaw("");
-                      setAddMenuError(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canSaveAddMenu || addMenuSaving}
-                    className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-                    onClick={() => void saveAddMenuItem()}
-                  >
-                    {addMenuSaving ? "Saving…" : "Save to menu"}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       ) : null}

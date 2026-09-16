@@ -21,9 +21,17 @@ export default defineSchema({
     value: v.any(),
   }).index("by_key", ["key"]),
 
+  menuCategories: defineTable({
+    name: v.string(),
+    sortOrder: v.number(),
+    /** Offer "Make it a meal" on items in this category. */
+    mealUpgrade: v.boolean(),
+  }).index("by_name", ["name"]),
+
   menuItems: defineTable({
     category: v.string(),
     name: v.string(),
+    description: v.optional(v.string()),
     basePrice: v.number(),
     available: v.boolean(),
     sortOrder: v.number(),

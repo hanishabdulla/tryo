@@ -10,6 +10,7 @@
 
 import type * as dashboardAuth from "../dashboardAuth.js";
 import type * as menu from "../menu.js";
+import type * as menuAdmin from "../menuAdmin.js";
 import type * as orders from "../orders.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
@@ -23,6 +24,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   dashboardAuth: typeof dashboardAuth;
   menu: typeof menu;
+  menuAdmin: typeof menuAdmin;
   orders: typeof orders;
   reports: typeof reports;
   seed: typeof seed;

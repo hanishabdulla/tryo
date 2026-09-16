@@ -29,7 +29,7 @@ export function DashboardNav() {
           ← POS
         </Link>
         <span className="text-lg font-semibold tracking-tight text-white">
-          Finances
+          Dashboard
         </span>
       </div>
       <nav className="flex flex-wrap items-center gap-2">
@@ -54,6 +54,17 @@ export function DashboardNav() {
           ].join(" ")}
         >
           Range & Excel
+        </Link>
+        <Link
+          href="/dashboard/menu"
+          className={[
+            linkClass,
+            path === "/dashboard/menu"
+              ? "bg-[#00955e] text-white shadow-[var(--tryo-glow)]"
+              : "border border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-[#00955e]/40",
+          ].join(" ")}
+        >
+          Menu
         </Link>
         <button
           type="button"

@@ -1,4 +1,6 @@
 import {
+  type GenericDataModel,
+  type GenericMutationCtx,
   internalMutationGeneric,
   mutationGeneric,
   queryGeneric,
@@ -43,6 +45,21 @@ function sameString(a: string, b: string): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
+}
+
+/** Throws unless `token` is a live dashboard session. For dashboard-only mutations. */
+export async function requireDashboardSession(
+  ctx: GenericMutationCtx<GenericDataModel>,
+  token: string,
+) {
+  const tokenHash = await hashToken(token);
+  const session = await ctx.db
+    .query("dashboardSessions")
+    .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+    .first();
+  if (!session || (session.expiresAt as number) <= Date.now()) {
+    throw new Error("Dashboard session expired. Sign in again.");
+  }
 }
 
 /** Set or change the password: `npx convex run dashboardAuth:setPassword '{"password":"..."}'` */

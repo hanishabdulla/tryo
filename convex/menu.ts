@@ -1,18 +1,14 @@
-import { mutationGeneric, queryGeneric } from "convex/server";
+import { queryGeneric } from "convex/server";
 import { v } from "convex/values";
 
-/** Allowed `menuItems.category` values (keep in sync with `lib/categories.ts`). */
-const MENU_ITEM_CATEGORIES = new Set([
-  "All Day Breakfast",
-  "Burgers",
-  "Wraps",
-  "Rice",
-  "Fries",
-  "Add-ons",
-  "Light Bites",
-  "Hot Soups",
-  "Drinks",
-]);
+export const listCategories = queryGeneric({
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("menuCategories").collect();
+    return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+});
 
 export const listItemsByCategory = queryGeneric({
   args: { category: v.string() },
@@ -25,6 +21,16 @@ export const listItemsByCategory = queryGeneric({
     return items
       .filter((i) => i.available)
       .sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+});
+
+/** Every item, including hidden ones, for the dashboard menu editor. */
+export const listAllItems = queryGeneric({
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx) => {
+    const items = await ctx.db.query("menuItems").collect();
+    return items.sort((a, b) => a.sortOrder - b.sortOrder);
   },
 });
 
@@ -52,45 +58,9 @@ export const listAllMenuItemsForPrint = queryGeneric({
       .map((i) => ({
         category: i.category,
         name: i.name,
+        description: i.description ?? "",
         basePrice: i.basePrice,
         sortOrder: i.sortOrder,
       }));
-  },
-});
-
-export const addMenuItem = mutationGeneric({
-  args: {
-    category: v.string(),
-    name: v.string(),
-    basePrice: v.number(),
-  },
-  returns: v.object({ ok: v.literal(true) }),
-  handler: async (ctx, { category, name, basePrice }) => {
-    if (!MENU_ITEM_CATEGORIES.has(category)) {
-      throw new Error("Invalid category");
-    }
-    const trimmed = name.trim();
-    if (!trimmed) {
-      throw new Error("Name is required");
-    }
-    if (!Number.isInteger(basePrice) || basePrice < 0) {
-      throw new Error("Invalid price");
-    }
-
-    const existing = await ctx.db
-      .query("menuItems")
-      .withIndex("by_category", (q) => q.eq("category", category))
-      .collect();
-    const maxSort = existing.reduce((m, r) => Math.max(m, r.sortOrder), -1);
-
-    await ctx.db.insert("menuItems", {
-      category,
-      name: trimmed.slice(0, 200),
-      basePrice: basePrice,
-      available: true,
-      sortOrder: maxSort + 1,
-    });
-
-    return { ok: true as const };
   },
 });
