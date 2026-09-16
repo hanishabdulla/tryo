@@ -53,6 +53,11 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
+          ### Look and feel
+          - Tryo logo on the till, dashboard and sign-in page; new app and window icon.
+          - Calmer, more consistent styling across the till and dashboard, with summary figures on reports.
+          - Reports can be downloaded as PDF as well as Excel.
+
           ### Menu
           - Items can have paid extras (set in Dashboard → Menu). Classic Hot Dog offers Cheese +£1.25.
           - Every item popup has a Custom instructions button. Notes print on the kitchen ticket and receipt.

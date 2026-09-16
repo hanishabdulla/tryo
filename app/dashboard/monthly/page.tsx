@@ -2,10 +2,12 @@
 
 import { useQuery } from "convex/react";
 import { useMemo, useState } from "react";
+import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { OrdersReportTable } from "@/components/dashboard/OrdersReportTable";
+import { ReportSummary } from "@/components/dashboard/ReportSummary";
+import { dateInputClass } from "@/components/dashboard/styles";
 import { api } from "@/lib/convex-api";
-import { downloadFinancesXlsx, type OrderRow } from "@/lib/finances-excel";
-import { formatPence } from "@/lib/money";
+import type { OrderRow } from "@/lib/finances-excel";
 import {
   localRangeBoundsMs,
   parseYmdLocal,
@@ -17,6 +19,11 @@ function firstOfMonthYmd(): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}-01`;
+}
+
+function shortDate(ymd: string) {
+  const d = parseYmdLocal(ymd);
+  return d ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ymd;
 }
 
 export default function MonthlyRangePage() {
@@ -36,73 +43,52 @@ export default function MonthlyRangePage() {
   ) as OrderRow[] | undefined;
 
   const rows = orders ?? [];
-  const sumPence = rows.reduce((s, o) => s + o.total, 0);
-
-  const exportXlsx = () => {
-    if (rows.length === 0) return;
-    const a = fromYmd <= toYmd ? fromYmd : toYmd;
-    const b = fromYmd <= toYmd ? toYmd : fromYmd;
-    downloadFinancesXlsx(rows, `tryo-finances-${a}_to_${b}`);
-  };
+  const a = fromYmd <= toYmd ? fromYmd : toYmd;
+  const b = fromYmd <= toYmd ? toYmd : fromYmd;
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Date range export</h1>
-          <p className="mt-1 max-w-xl text-sm text-zinc-500">
-            Choose two dates (inclusive) to load orders and download an Excel
-            workbook with orders, line items, and a short summary sheet.
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Sales by date range</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {shortDate(a)} – {shortDate(b)} · Export as Excel or PDF
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-400">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-500">
             From
             <input
               type="date"
               value={fromYmd}
               onChange={(e) => setFromYmd(e.target.value)}
-              className="h-11 min-w-[11rem] rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-white"
+              className={dateInputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-400">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-500">
             To
             <input
               type="date"
               value={toYmd}
               onChange={(e) => setToYmd(e.target.value)}
-              className="h-11 min-w-[11rem] rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-white"
+              className={dateInputClass}
             />
           </label>
-          <button
-            type="button"
-            onClick={exportXlsx}
-            disabled={rows.length === 0}
-            className="min-h-11 rounded-xl bg-[#00955e] px-4 text-sm font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Download Excel
-          </button>
+          <ExportButtons
+            orders={rows}
+            filenameBase={`tryo-finances-${a}_to_${b}`}
+            title="Sales report"
+            period={`${shortDate(a)} – ${shortDate(b)}`}
+          />
         </div>
       </div>
 
-      <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
-        {orders === undefined ? (
-          <p className="text-sm text-zinc-500">Loading…</p>
-        ) : (
-          <p className="text-sm text-zinc-400">
-            <span className="font-medium text-zinc-200">{rows.length}</span>{" "}
-            order{rows.length === 1 ? "" : "s"} in range · Total{" "}
-            <span className="font-semibold text-[#00955e]">
-              {formatPence(sumPence)}
-            </span>
-          </p>
-        )}
-      </div>
+      <ReportSummary orders={orders} />
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-zinc-500">
-        Orders list
-      </h2>
-      <OrdersReportTable orders={rows} />
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-300">Orders</h2>
+        <OrdersReportTable orders={rows} loading={orders === undefined} />
+      </section>
     </div>
   );
 }

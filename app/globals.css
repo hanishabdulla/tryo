@@ -7,7 +7,9 @@
   --tryo-green: #00955e;
   --tryo-green-hover: #007a4c;
   --tryo-green-soft: rgba(0, 149, 94, 0.18);
-  --tryo-glow: 0 0 28px -6px rgba(0, 149, 94, 0.45);
+  /* Soft lift for primary actions: a hairline highlight plus a low, diffuse shadow. */
+  --tryo-glow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 24px -14px rgba(0, 149, 94, 0.7);
 }
 
 @theme inline {
@@ -29,6 +31,50 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Prices and totals line up in columns. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(0, 149, 94, 0.35);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(0, 149, 94, 0.8);
+  outline-offset: 2px;
+}
+
+/* Quiet dark scrollbars instead of the bright system default. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #52525b;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
 }
 
 /* Thermal receipt: off-screen on screen, full width when printing */

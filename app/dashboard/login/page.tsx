@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -41,42 +42,61 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4">
-      <h1 className="text-2xl font-bold text-white">Dashboard sign-in</h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        Enter the dashboard password to view finances.
-      </p>
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <label className="block text-sm font-medium text-zinc-300">
-          Password
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-white outline-none focus:border-[#00955e]/70"
-            disabled={loading}
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Image
+            src="/brand/tryo-wordmark.png"
+            alt="Tryo"
+            width={485}
+            height={240}
+            priority
+            unoptimized
+            className="h-14 w-auto select-none"
           />
-        </label>
-        {error ? (
-          <p className="text-sm font-medium text-red-400" role="alert">
-            {error}
+          <h1 className="mt-6 text-xl font-semibold tracking-tight text-white">
+            Dashboard sign-in
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-500">
+            Sales reports and menu settings.
           </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={loading || password.length === 0}
-          className="flex h-12 w-full items-center justify-center rounded-xl bg-[#00955e] text-sm font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40"
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="space-y-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-6 shadow-2xl shadow-black/40"
         >
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-      <Link
-        href="/"
-        className="mt-8 text-center text-sm text-zinc-500 hover:text-zinc-300"
-      >
-        ← Back to POS
-      </Link>
+          <label className="block text-sm font-medium text-zinc-300">
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-2 h-12 w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 text-white outline-none transition-colors focus:border-[#00955e]/70"
+              disabled={loading}
+            />
+          </label>
+          {error ? (
+            <p className="text-sm font-medium text-red-400" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={loading || password.length === 0}
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-[#00955e] text-sm font-bold text-white shadow-[var(--tryo-glow)] transition-colors hover:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+        <Link
+          href="/"
+          className="mt-6 block text-center text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+        >
+          ← Back to till
+        </Link>
+      </div>
     </div>
   );
 }

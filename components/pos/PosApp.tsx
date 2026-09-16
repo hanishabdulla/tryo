@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -517,19 +518,31 @@ export default function PosApp() {
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-zinc-950 text-zinc-50">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <div className="flex items-baseline gap-3">
-          <span className="text-lg font-semibold tracking-tight text-white">
-            Tryo
-          </span>
-          <span className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-            POS
-          </span>
+      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-zinc-950 px-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <Image
+            src="/brand/tryo-wordmark.png"
+            alt="Tryo"
+            width={485}
+            height={240}
+            priority
+            unoptimized
+            className="h-9 w-auto select-none"
+          />
+          <div className="hidden h-7 w-px bg-white/10 sm:block" />
+          <div className="hidden min-w-0 leading-tight sm:block">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              Point of sale
+            </div>
+            <div className="truncate text-sm font-medium text-zinc-300">
+              Rushden Lakes · Takeaway
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard/daily"
-            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
           >
             Dashboard
           </Link>
@@ -547,7 +560,7 @@ export default function PosApp() {
                 window.open("/print/menu", "_blank", "noopener,noreferrer");
               }
             }}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
           >
             Print menu
           </button>
@@ -557,10 +570,10 @@ export default function PosApp() {
               setPrinterOpen(true);
               void refreshPrinters();
             }}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
           >
             <span
-              className={`h-2 w-2 rounded-full ${configuredPrinter ? "bg-[#00955e]" : "bg-amber-400"}`}
+              className={`h-2 w-2 rounded-full ${configuredPrinter ? "bg-[#34c68a] shadow-[0_0_0_3px_rgba(52,198,138,0.18)]" : "bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]"}`}
             />
             Receipt printer
           </button>
@@ -568,19 +581,16 @@ export default function PosApp() {
             type="button"
             disabled={!receipt || receiptBusy}
             onClick={() => void printCurrentReceipt()}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {receiptBusy ? "Printing…" : "Reprint last"}
           </button>
-          <span className="hidden self-center text-xs text-zinc-500 sm:inline">
-            Rushden Lakes · Takeaway
-          </span>
         </div>
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <section className="flex min-h-0 min-w-0 flex-col border-zinc-800 lg:border-r">
-          <div className="shrink-0 border-b border-zinc-800 px-3 py-3">
+        <section className="flex min-h-0 min-w-0 flex-col border-white/[0.07] lg:border-r">
+          <div className="shrink-0 border-b border-white/[0.06] px-4 py-3">
             <div className="flex flex-wrap gap-2">
               {(categories ?? []).map((cat) => {
                 const active = cat._id === activeCategory?._id;
@@ -590,10 +600,10 @@ export default function PosApp() {
                     type="button"
                     onClick={() => setSelectedCategory(cat.name)}
                     className={[
-                      "min-h-12 shrink-0 rounded-2xl px-4 text-sm font-semibold transition-colors",
+                      "min-h-11 shrink-0 rounded-xl px-4 text-sm font-semibold transition-colors",
                       active
                         ? "bg-[#00955e] text-white shadow-[var(--tryo-glow)]"
-                        : "bg-zinc-900 text-zinc-200",
+                        : "bg-white/[0.04] text-zinc-300 ring-1 ring-inset ring-white/[0.06] hover:bg-white/[0.08] hover:text-white",
                     ].join(" ")}
                   >
                     {cat.name}
@@ -603,7 +613,7 @@ export default function PosApp() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {categories === undefined ||
             (activeCategory && categoryMenuItems === undefined) ? (
               <div className="flex h-full min-h-[240px] items-center justify-center text-zinc-500">
@@ -614,13 +624,13 @@ export default function PosApp() {
                 No items in this category. Add them in Dashboard → Menu.
               </div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
                 {itemsForGrid.map((item) => (
                   <button
                     key={item._id}
                     type="button"
                     onClick={() => onTileTap(item)}
-                    className="flex min-h-[88px] flex-col items-start justify-between rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 text-left transition-transform hover:border-[#00955e]/35 hover:shadow-[0_0_24px_-8px_rgba(0,149,94,0.25)] active:scale-[0.98]"
+                    className="group flex min-h-[112px] flex-col items-start justify-between rounded-2xl border border-white/[0.06] bg-zinc-900/60 p-4 text-left transition duration-150 hover:border-[#00955e]/40 hover:bg-zinc-900 active:scale-[0.98]"
                   >
                     <span>
                       <span className="block text-base font-semibold leading-snug text-white">
@@ -632,8 +642,16 @@ export default function PosApp() {
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-2 text-lg font-bold text-[#00955e] drop-shadow-[0_0_14px_rgba(0,149,94,0.35)]">
-                      {formatPence(item.basePrice)}
+                    <span className="mt-3 flex w-full items-center justify-between">
+                      <span className="text-base font-semibold text-[#34c68a]">
+                        {formatPence(item.basePrice)}
+                      </span>
+                      <span
+                        aria-hidden
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] text-base leading-none text-zinc-400 transition-colors group-hover:bg-[#00955e] group-hover:text-white"
+                      >
+                        +
+                      </span>
                     </span>
                   </button>
                 ))}
@@ -642,13 +660,18 @@ export default function PosApp() {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col border-t border-zinc-800 bg-zinc-950 lg:border-t-0">
-          <div className="shrink-0 border-b border-zinc-800 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Current order
+        <aside className="flex min-h-0 flex-col border-t border-white/[0.06] bg-[#0c0c0e] lg:border-t-0">
+          <div className="shrink-0 border-b border-white/[0.06] px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-white">Current order</div>
+              {totalItemCount > 0 ? (
+                <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs font-semibold text-zinc-300">
+                  {totalItemCount} item{totalItemCount === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
-            <div className="mt-1 text-sm text-zinc-400">
-              Number is assigned when you submit payment.
+            <div className="mt-0.5 text-xs text-zinc-500">
+              Order number is assigned when payment is submitted.
             </div>
             <button
               type="button"
@@ -657,24 +680,25 @@ export default function PosApp() {
                 setCustomItemName("");
                 setCustomItemPriceRaw("");
               }}
-              className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#00955e]/50 bg-[rgba(0,149,94,0.12)] text-base font-bold text-white shadow-[0_0_20px_-8px_rgba(0,149,94,0.2)] transition-colors hover:bg-[rgba(0,149,94,0.2)] active:scale-[0.99]"
+              className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 text-sm font-semibold text-zinc-300 transition-colors hover:border-[#00955e]/60 hover:bg-[#00955e]/[0.06] hover:text-white active:scale-[0.99]"
             >
-              <span className="text-xl leading-none text-[#00955e]">+</span>
+              <span className="text-xl leading-none text-[#34c68a]">+</span>
               Custom item
             </button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {cart.length === 0 ? (
-              <div className="flex min-h-[160px] items-center justify-center rounded-2xl border border-dashed border-zinc-800 text-zinc-500">
-                Cart is empty
+              <div className="flex min-h-[180px] flex-col items-center justify-center gap-1 text-center">
+                <div className="text-sm font-medium text-zinc-400">No items yet</div>
+                <div className="text-xs text-zinc-600">Tap a menu item to add it to the order.</div>
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
                 {cart.map((line) => (
                   <li
                     key={line.lineKey}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
+                    className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -712,27 +736,27 @@ export default function PosApp() {
                         ) : null}
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-sm font-semibold text-[#00955e]">
+                        <div className="text-sm font-semibold text-white">
                           {formatPence(line.unitPricePence * line.quantity)}
                         </div>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center rounded-xl bg-white/[0.05] ring-1 ring-inset ring-white/[0.06]">
                         <button
                           type="button"
-                          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-800 text-2xl font-semibold text-white"
+                          className="flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-medium text-zinc-200 hover:bg-white/[0.06]"
                           onClick={() => bumpQty(line.lineKey, -1)}
                           aria-label="Decrease quantity"
                         >
                           −
                         </button>
-                        <div className="min-w-[3rem] text-center text-lg font-bold">
+                        <div className="min-w-[2.5rem] text-center text-base font-semibold">
                           {line.quantity}
                         </div>
                         <button
                           type="button"
-                          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-800 text-2xl font-semibold text-white"
+                          className="flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-medium text-zinc-200 hover:bg-white/[0.06]"
                           onClick={() => bumpQty(line.lineKey, 1)}
                           aria-label="Increase quantity"
                         >
@@ -741,7 +765,7 @@ export default function PosApp() {
                       </div>
                       <button
                         type="button"
-                        className="min-h-14 rounded-2xl bg-red-950/60 px-4 text-sm font-semibold text-red-200"
+                        className="min-h-12 rounded-xl px-4 text-sm font-semibold text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
                         onClick={() => removeLine(line.lineKey)}
                       >
                         Remove
@@ -753,7 +777,7 @@ export default function PosApp() {
             )}
           </div>
 
-          <div className="shrink-0 space-y-3 border-t border-zinc-800 bg-zinc-950/95 p-4 backdrop-blur">
+          <div className="shrink-0 space-y-2.5 border-t border-white/[0.07] bg-[#0c0c0e] p-4">
             <div className="flex justify-between text-sm text-zinc-400">
               <span>Subtotal</span>
               <span className="font-semibold text-zinc-100">
@@ -766,9 +790,9 @@ export default function PosApp() {
                 {formatPence(deliveryFeePence)}
               </span>
             </div>
-            <div className="flex justify-between text-lg font-bold text-white">
+            <div className="flex items-baseline justify-between border-t border-white/[0.06] pt-3 text-xl font-bold text-white">
               <span>Total</span>
-              <span className="text-[#00955e] drop-shadow-[0_0_12px_rgba(0,149,94,0.3)]">
+              <span className="text-[#34c68a]">
                 {formatPence(cartSubtotalPence + deliveryFeePence)}
               </span>
             </div>
@@ -782,7 +806,7 @@ export default function PosApp() {
                 setDiscountKind("percentage");
                 setDiscountRaw("");
               }}
-              className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#00955e] text-lg font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              className="mt-1 flex min-h-14 w-full items-center justify-center rounded-xl bg-[#00955e] text-lg font-bold text-white shadow-[var(--tryo-glow)] transition-colors hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-zinc-500 disabled:shadow-none"
             >
               Save &amp; Pay
             </button>
@@ -792,12 +816,12 @@ export default function PosApp() {
 
       {sheetItem ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="item-sheet-title"
         >
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2
@@ -810,7 +834,7 @@ export default function PosApp() {
                   {mealEligible || sheetItem.options?.length ? "Base " : "Price "}
                   {formatPence(sheetItem.basePrice)}
                   {sheetOptionsPence > 0 ? (
-                    <span className="font-semibold text-[#00955e]">
+                    <span className="font-semibold text-[#34c68a]">
                       {" "}
                       · with extras {formatPence(sheetItem.basePrice + sheetOptionsPence)}
                     </span>
@@ -841,7 +865,7 @@ export default function PosApp() {
                     "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
                     !sheetMeal
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Individual
@@ -856,7 +880,7 @@ export default function PosApp() {
                     "min-h-16 rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
                     sheetMeal
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Make it a Meal
@@ -891,14 +915,14 @@ export default function PosApp() {
                           "flex min-h-14 items-center justify-between rounded-2xl border px-4 text-left text-sm font-semibold transition-colors",
                           on
                             ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                            : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                            : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                         ].join(" ")}
                       >
                         <span>
                           {on ? "✓ " : "+ "}
                           {option.name}
                         </span>
-                        <span className="text-xs font-normal text-[#00955e]">
+                        <span className="text-xs font-normal text-[#34c68a]">
                           +{formatPence(option.price)}
                         </span>
                       </button>
@@ -920,7 +944,7 @@ export default function PosApp() {
                   rows={2}
                   autoFocus
                   placeholder="e.g. no onions, sauce on the side"
-                  className="mt-2 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-base text-white outline-none focus:border-[#00955e]/70"
+                  className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 py-3 text-base text-white outline-none focus:border-[#00955e]/70"
                 />
               </label>
             ) : (
@@ -929,7 +953,7 @@ export default function PosApp() {
                 onClick={() => setSheetNoteOpen(true)}
                 className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-700 bg-zinc-950 text-sm font-semibold text-zinc-200 hover:border-[#00955e]/50"
               >
-                <span className="text-lg leading-none text-[#00955e]">+</span>
+                <span className="text-lg leading-none text-[#34c68a]">+</span>
                 Custom instructions
               </button>
             )}
@@ -981,12 +1005,12 @@ export default function PosApp() {
 
       {customItemOpen ? (
         <div
-          className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-item-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+          <div className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
               <h2
                 id="custom-item-title"
@@ -1018,7 +1042,7 @@ export default function PosApp() {
               type="text"
               autoComplete="off"
               maxLength={120}
-              className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
+              className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
               value={customItemName}
               onChange={(e) => setCustomItemName(e.target.value)}
               placeholder="e.g. Extra sauce pot"
@@ -1029,7 +1053,7 @@ export default function PosApp() {
             </label>
             <input
               inputMode="decimal"
-              className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
+              className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
               value={customItemPriceRaw}
               onChange={(e) => setCustomItemPriceRaw(e.target.value)}
               placeholder="0.00"
@@ -1062,12 +1086,12 @@ export default function PosApp() {
 
       {payOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pay-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+          <div className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="pay-title" className="text-xl font-bold text-white">
@@ -1093,7 +1117,7 @@ export default function PosApp() {
                 </span>
               </div>
               {discountPence > 0 ? (
-                <div className="flex justify-between gap-3 text-[#00955e]">
+                <div className="flex justify-between gap-3 text-[#34c68a]">
                   <span>
                     {discountKind === "percentage"
                       ? `Discount (${parsePercentDiscountInput(discountRaw)}%)`
@@ -1108,7 +1132,7 @@ export default function PosApp() {
             <p className="mt-2 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
               Amount due
             </p>
-            <div className="text-center text-4xl font-extrabold text-[#00955e] drop-shadow-[0_0_20px_rgba(0,149,94,0.35)]">
+            <div className="text-center text-4xl font-extrabold text-[#34c68a]">
               {formatPence(amountDuePence)}
             </div>
 
@@ -1127,7 +1151,7 @@ export default function PosApp() {
                     "min-h-14 rounded-2xl border text-sm font-bold",
                     discountKind === "percentage"
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Percentage
@@ -1142,7 +1166,7 @@ export default function PosApp() {
                     "min-h-14 rounded-2xl border text-sm font-bold",
                     discountKind === "fixed"
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Fixed (£)
@@ -1155,7 +1179,7 @@ export default function PosApp() {
               </label>
               <input
                 inputMode="decimal"
-                className="mt-2 h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
+                className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
                 value={discountRaw}
                 onChange={(e) => setDiscountRaw(e.target.value)}
                 placeholder={discountKind === "percentage" ? "0" : "0.00"}
@@ -1175,7 +1199,7 @@ export default function PosApp() {
                   "min-h-16 rounded-2xl border text-lg font-bold",
                   payMethod === "card"
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Card
@@ -1187,7 +1211,7 @@ export default function PosApp() {
                   "min-h-16 rounded-2xl border text-lg font-bold",
                   payMethod === "cash"
                     ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                 ].join(" ")}
               >
                 Cash
@@ -1201,7 +1225,7 @@ export default function PosApp() {
                 </label>
                 <input
                   inputMode="decimal"
-                  className="h-16 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-2xl font-semibold text-white outline-none focus:border-[#00955e]/70"
+                  className="h-16 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-2xl font-semibold text-white outline-none focus:border-[#00955e]/70"
                   value={givenRaw}
                   onChange={(e) => setGivenRaw(e.target.value)}
                   placeholder="0.00"
@@ -1211,7 +1235,7 @@ export default function PosApp() {
                     "rounded-2xl border px-4 py-3 text-lg font-bold",
                     changeShort
                       ? "border-red-500/60 bg-red-950/40 text-red-200"
-                      : "border-zinc-800 bg-zinc-950 text-white",
+                      : "border-white/[0.07] bg-zinc-950 text-white",
                   ].join(" ")}
                 >
                   Change due:{" "}

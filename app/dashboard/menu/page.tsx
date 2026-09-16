@@ -49,9 +49,9 @@ async function menuAction(action: string, args: Record<string, unknown>) {
 }
 
 const inputClass =
-  "mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-white outline-none focus:border-[#00955e]/70";
+  "mt-2 h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white outline-none focus:border-[#00955e]/70";
 const smallButton =
-  "inline-flex min-h-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:opacity-40";
+  "inline-flex min-h-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:opacity-40";
 
 export default function MenuPage() {
   const categories = useQuery(api.menu.listCategories, {}) as
@@ -162,7 +162,7 @@ export default function MenuPage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Menu</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Menu</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Changes appear on the till and printed menu straight away.
           </p>
@@ -205,7 +205,7 @@ export default function MenuPage() {
         </p>
       ) : null}
 
-      <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+      <section className="mb-6 rounded-2xl border border-white/[0.06] bg-zinc-950/50 p-4">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-zinc-500">
           Make it a meal
         </h2>
@@ -257,9 +257,9 @@ export default function MenuPage() {
           return (
             <section
               key={category._id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-950/50"
+              className="rounded-2xl border border-white/[0.06] bg-zinc-950/50"
             >
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold text-white">{category.name}</h2>
                   <span className="text-xs text-zinc-500">
@@ -334,7 +334,7 @@ export default function MenuPage() {
                       <div className={`min-w-0 flex-1 ${item.available ? "" : "opacity-50"}`}>
                         <div className="flex flex-wrap items-baseline gap-2">
                           <span className="font-semibold text-white">{item.name}</span>
-                          <span className="font-semibold text-[#00955e]">
+                          <span className="font-semibold text-[#34c68a]">
                             {formatPence(item.basePrice)}
                           </span>
                           {!item.available ? (
@@ -415,13 +415,13 @@ export default function MenuPage() {
 
       {itemDraft ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="item-editor-title"
         >
           <form
-            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60"
             onSubmit={(e) => {
               e.preventDefault();
               void saveItem();
@@ -587,13 +587,13 @@ export default function MenuPage() {
 
       {categoryDraft ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="category-editor-title"
         >
           <form
-            className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl"
+            className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60"
             onSubmit={(e) => {
               e.preventDefault();
               void saveCategory();
