@@ -53,12 +53,18 @@ function formatTicketTime(ts: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+function formatInvoiceNumber(orderNumber: number): string {
+  return orderNumber.toString().padStart(2, "0");
+}
+
 /** Short prep ticket for the kitchen: items and options only, no prices. */
 function KitchenTicket({ data }: { data: ReceiptPayload }) {
   return (
     <div className="kitchen-ticket font-mono text-[13px] leading-snug text-black">
       <div className="flex items-baseline justify-between">
-        <span className="text-[22px] font-bold">#{data.orderNumber}</span>
+        <span className="text-[22px] font-bold">
+          #{formatInvoiceNumber(data.orderNumber)}
+        </span>
         <span className="text-[16px] font-bold">{formatTicketTime(data.createdAt)}</span>
       </div>
       <div className="font-semibold uppercase">Kitchen · Takeaway</div>
@@ -124,16 +130,16 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
         <div className="text-center">Phone: {data.businessPhone}</div>
         <div className="text-center">VAT Number: {data.businessVat}</div>
         <div className="mt-2 text-center">
-          Invoice No: #{data.orderNumber}
+          Invoice No: #{formatInvoiceNumber(data.orderNumber)}
         </div>
         <div className="text-center">takeaway</div>
-        <div className="my-2 border-t border-dashed border-black" />
+        <div className="my-1 border-t border-dashed border-black" />
         <div>date: {formatReceiptTimestamp(data.createdAt)}</div>
         <div>customer: Walk In Customer</div>
         <div>address: NN10 6FH</div>
-        <div className="my-2 border-t border-dashed border-black" />
+        <div className="my-1 border-t border-dashed border-black" />
         {data.lines.map((line, idx) => (
-          <div key={`${line.name}-${idx}`} className="mb-2">
+          <div key={`${line.name}-${idx}`} className="mb-1">
             <div className="flex justify-between gap-2">
               <span className="min-w-0 flex-1 uppercase">
                 {line.quantity} x {line.name}
@@ -180,7 +186,7 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
             ) : null}
           </div>
         ))}
-        <div className="my-2 border-t border-dashed border-black" />
+        <div className="my-1 border-t border-dashed border-black" />
         <div className="flex justify-between gap-2">
           <span>Sub Total:</span>
           <span>{formatPence(data.subtotalPence)}</span>
@@ -197,7 +203,10 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
           <span>Delivery Fee:</span>
           <span>£0.00</span>
         </div>
-        <div className="flex justify-between gap-2 font-semibold">
+        <div
+          className="flex justify-between gap-2 text-[12px] font-bold"
+          data-receipt-total
+        >
           <span>TOTAL:</span>
           <span>{formatPence(data.totalPence)}</span>
         </div>
@@ -209,9 +218,11 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
           <span>Payment Mode</span>
           <span>{data.paymentMethod === "card" ? "Card" : "Cash"}</span>
         </div>
-        <div className="my-2 border-t border-dashed border-black" />
-        <div className="text-center">Thank you for visiting us!</div>
-        <div className="my-2 border-t border-dashed border-black" />
+        <div className="my-1 border-t border-dashed border-black" />
+        <div className="text-center font-semibold" data-receipt-footer>
+          Thank you for visiting us!
+        </div>
+        <div className="my-1 border-t border-dashed border-black" />
         <div className="text-center">Served by: Staff</div>
         </div>
       ) : null}

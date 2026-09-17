@@ -86,7 +86,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   pointer-events: none;
 }
 
-.receipt-paper,
+.receipt-paper {
+  width: 72mm;
+  padding: 3mm 4mm 4mm;
+  background: white;
+}
+
 .kitchen-ticket {
   width: 72mm;
   padding: 8mm 4mm;

@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
     let previousHeight = 0;
     for (const count of [1, 60, 150]) {
       const rows = Array.from({ length: count }, (_, i) => `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>ITEM ${i + 1}</span><span>£12.34</span></div>`).join('');
-      await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body style="height:640px;overflow:hidden"><p>DO NOT PRINT THE TILL</p><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:8mm 4mm;box-sizing:border-box;font:11px/1.4 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div>${rows}<svg width="112" height="112"><rect width="112" height="112" fill="black"/></svg><p>END OF RECEIPT</p></div></div></body></html>`));
+      await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body style="height:640px;overflow:hidden"><p>DO NOT PRINT THE TILL</p><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:8mm 4mm;box-sizing:border-box;font:11px/1.4 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div>${rows}<svg width="112" height="112"><rect width="112" height="112" fill="black"/></svg><div data-receipt-total>TOTAL: £12.34</div><p data-receipt-footer>END OF RECEIPT</p></div></div></body></html>`));
       const markup = await captureReceipt(source.webContents);
       assert(!markup.includes('DO NOT PRINT THE TILL'));
       assert(markup.includes('<svg'));
@@ -59,8 +59,8 @@ app.whenReady().then(async () => {
       const image = decodeRaster(raw);
       assert.equal(image.getSize().width, 576);
       fs.writeFileSync(path.join(output, `receipt-${count}.png`), image.toPNG());
-      // The last line must survive: ink within the final 20mm (160 dots) of the raster.
-      assert(Math.max(...inkRows(image)) > image.getSize().height - 160, `bottom of receipt missing: ${output}`);
+      // The last line must survive before the intentional paper/feed safety margin.
+      assert(Math.max(...inkRows(image)) > image.getSize().height - 300, `bottom of receipt missing: ${output}`);
       const { win, pageSize } = await prepareReceiptWindow(markup);
       try {
         assert.equal(pageSize.width, 80000);
@@ -74,6 +74,34 @@ app.whenReady().then(async () => {
         console.log(`PASS ${count} lines: ESC/POS ${image.getSize().height} dots; PDF one 80mm × ${pageSize.height / 1000}mm page`);
       } finally { win.destroy(); }
     }
+    const receiptRows = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>1 x SOUTHERN FRIED CHICKEN WRAP</span><span>£7.99</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>1 x RASPBERRY LEMONADE</span><span>£3.99</span></div>`;
+    await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:3mm 4mm 4mm;box-sizing:border-box;font:11px/1.375 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div><div style="text-align:center">Rushden Lakes, NN10 6FH</div><div style="text-align:center">Phone: 01933 000000</div><div style="text-align:center">VAT Number: 000000000</div><div style="margin-top:8px;text-align:center">Invoice No: #01</div><div style="text-align:center">takeaway</div><hr><div>date: 2026-09-17 12:30:00</div><div>customer: Walk In Customer</div><div>address: NN10 6FH</div><hr>${receiptRows}<hr><div style="display:flex;justify-content:space-between"><span>Sub Total:</span><span>£11.98</span></div><div style="display:flex;justify-content:space-between"><span>Delivery Fee:</span><span>£0.00</span></div><div data-receipt-total style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>TOTAL:</span><span>£11.98</span></div><div style="display:flex;justify-content:space-between"><span>Total Item(s):</span><span>2</span></div><div style="display:flex;justify-content:space-between"><span>Payment Mode</span><span>Card</span></div><hr><div data-receipt-footer style="text-align:center;font-weight:600">Thank you for visiting us!</div><hr><div style="text-align:center">Served by: Staff</div></div></div></body></html>`));
+    const customerMarkup = await captureReceipt(source.webContents);
+    assert.match(customerMarkup, /Invoice No: #01/);
+    assert.match(customerMarkup, /TOTAL:/);
+    assert.match(customerMarkup, /Thank you for visiting us!/);
+    const customerRaw = await receiptRaster(customerMarkup);
+    const customerImage = decodeRaster(customerRaw);
+    fs.writeFileSync(path.join(output, 'receipt-customer.png'), customerImage.toPNG());
+    assert(Math.max(...inkRows(customerImage)) > customerImage.getSize().height - 200,
+      `customer receipt footer missing: ${output}`);
+    const preparedCustomer = await prepareReceiptWindow(customerMarkup);
+    try {
+      const customerPdf = await preparedCustomer.win.webContents.printToPDF({
+        preferCSSPageSize: true,
+        printBackground: true,
+        pageSize: {
+          width: preparedCustomer.pageSize.width / 25400,
+          height: preparedCustomer.pageSize.height / 25400,
+        },
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      });
+      fs.writeFileSync(path.join(output, 'receipt-customer.pdf'), customerPdf);
+      assert.equal((customerPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length, 1);
+    } finally { preparedCustomer.win.destroy(); }
+    console.log(`PASS customer receipt: ${customerImage.getSize().height} dots with total and footer`);
     const missing = await printReceipt('<p>Test</p>', 'TRYO-NONEXISTENT-PRINTER');
     assert.equal(missing.ok, false);
     assert.match(missing.error, /not available/);

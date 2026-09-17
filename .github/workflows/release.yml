@@ -53,17 +53,15 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
-          ### Daily till and cash settlement
-          - Invoice numbers restart at #1 for each London trading day.
-          - Start each day by entering the opening cash float.
-          - Tracks cash received, customer change, cash added, cash removed, card sales and the expected drawer balance.
-          - Settle the day with a physical cash count and an automatic over/short difference.
-          - Requires an unclosed previous day to be settled before opening the next one.
-          - Adds the till settlement to Dashboard → Daily summary.
+          ### Invoice numbering
+          - The first invoice after opening each day's till is now #01.
+          - Invoice numbering is tied to the daily till session so an upgrade cannot inherit the old global sequence.
 
           ### Customer receipt
-          - Keeps the Tryo logo but removes the duplicate Tryo heading below it.
-          - Makes the logo shorter and more compact for 80 mm thermal printers without distorting its proportions.
+          - Prints invoice numbers with two digits, starting at #01.
+          - Keeps the total and thank-you footer safely inside the printable receipt area.
+          - Uses a more compact layout and adds extra feed space before cutting.
+          - Refuses to print an incomplete customer receipt if the total or footer is missing from the rendered document.
 
           ### Setup
           1. Download and run the `.exe` installer.

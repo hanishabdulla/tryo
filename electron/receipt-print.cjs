@@ -8,6 +8,11 @@ async function captureReceipt(contents, selector = '.receipt-paper') {
     await document.fonts.ready;
     const source = document.querySelector('#receipt-print-root ${selector}');
     if (!source || !source.textContent.trim()) throw new Error('No receipt is available to print.');
+    if ('${selector}' === '.receipt-paper' &&
+        (!source.querySelector('[data-receipt-total]') ||
+         !source.querySelector('[data-receipt-footer]'))) {
+      throw new Error('The customer receipt is incomplete and was not printed.');
+    }
     await Promise.all([...source.querySelectorAll('img')].map(image =>
       image.complete ? Promise.resolve() : image.decode().catch(() => {})
     ));
@@ -86,6 +91,7 @@ let queue = Promise.resolve();
 const PRINTER_DOTS = 576;
 const SLICE_DOTS = 1024;
 const MAX_RECEIPT_DOTS = 40000;
+const BOTTOM_GUARD_DOTS = 96;
 
 // Render at printer resolution offscreen and capture in fixed slices. A normal
 // window cannot be taller than the screen, so long receipts would be clipped.
@@ -107,7 +113,7 @@ async function receiptRaster(markup) {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     const height = await win.webContents.executeJavaScript(`(async () => {
       await document.fonts.ready;
-      return Math.ceil(document.getElementById('strip').getBoundingClientRect().height);
+      return Math.ceil(document.getElementById('strip').getBoundingClientRect().height) + ${BOTTOM_GUARD_DOTS};
     })()`);
     if (!Number.isFinite(height) || height <= 0) throw new Error('Could not measure the receipt.');
     if (height > MAX_RECEIPT_DOTS) throw new Error('Receipt is too long for one print job. Split this order into smaller receipts.');

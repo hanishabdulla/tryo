@@ -106,7 +106,11 @@ export const submitOrder = mutationGeneric({
       // UI always opens the till explicitly before submitting an order.
     }
 
-    const counterName = `orders:${businessDate}`;
+    // Tie the invoice sequence to the till session, not to the previous global
+    // counter. This guarantees that the first order after opening a new day is
+    // #1, including on the day an older app version is upgraded.
+    const counterScope = session ? String(session._id) : "legacy";
+    const counterName = `orders:${businessDate}:${counterScope}`;
     const existing = await ctx.db
       .query("counters")
       .withIndex("by_name", (q) => q.eq("name", counterName))
@@ -117,16 +121,13 @@ export const submitOrder = mutationGeneric({
       orderNumber = existing.value + 1;
       await ctx.db.patch(existing._id, { value: orderNumber });
     } else {
-      // Avoid duplicate invoice numbers if this version is deployed partway
-      // through a trading day containing orders from an older app version.
-      const todaysOrders = (await ctx.db.query("orders").collect()).filter(
-        (order) => businessDateAt(order.createdAt) === businessDate,
+      const scopedOrders = (await ctx.db.query("orders").collect()).filter(
+        (order) =>
+          order.status === "completed" &&
+          businessDateAt(order.createdAt) === businessDate &&
+          (!session || order.createdAt >= session.openedAt),
       );
-      orderNumber =
-        todaysOrders.reduce(
-          (highest, order) => Math.max(highest, order.orderNumber),
-          0,
-        ) + 1;
+      orderNumber = scopedOrders.length + 1;
       await ctx.db.insert("counters", {
         name: counterName,
         value: orderNumber,
