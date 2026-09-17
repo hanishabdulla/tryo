@@ -1,5 +1,6 @@
 import { mutationGeneric } from "convex/server";
 import { v } from "convex/values";
+import { businessDateAt } from "./businessDate";
 
 const orderLine = v.object({
   itemName: v.string(),
@@ -79,9 +80,36 @@ export const submitOrder = mutationGeneric({
       }
     }
 
+    const createdAt = Date.now();
+    const businessDate = businessDateAt(createdAt);
+    const session = await ctx.db
+      .query("tillSessions")
+      .withIndex("by_businessDate", (q) =>
+        q.eq("businessDate", businessDate),
+      )
+      .unique();
+    if (session?.status === "closed") {
+      throw new Error("Today's till has been settled and closed");
+    }
+    if (!session) {
+      const previousOpenSession = await ctx.db
+        .query("tillSessions")
+        .withIndex("by_status", (q) => q.eq("status", "open"))
+        .order("desc")
+        .first();
+      if (previousOpenSession) {
+        throw new Error(
+          `Settle the open till from ${previousOpenSession.businessDate} first`,
+        );
+      }
+      // Older app versions can keep taking orders during rollout. The current
+      // UI always opens the till explicitly before submitting an order.
+    }
+
+    const counterName = `orders:${businessDate}`;
     const existing = await ctx.db
       .query("counters")
-      .withIndex("by_name", (q) => q.eq("name", "orders"))
+      .withIndex("by_name", (q) => q.eq("name", counterName))
       .unique();
 
     let orderNumber: number;
@@ -89,11 +117,22 @@ export const submitOrder = mutationGeneric({
       orderNumber = existing.value + 1;
       await ctx.db.patch(existing._id, { value: orderNumber });
     } else {
-      orderNumber = 1;
-      await ctx.db.insert("counters", { name: "orders", value: orderNumber });
+      // Avoid duplicate invoice numbers if this version is deployed partway
+      // through a trading day containing orders from an older app version.
+      const todaysOrders = (await ctx.db.query("orders").collect()).filter(
+        (order) => businessDateAt(order.createdAt) === businessDate,
+      );
+      orderNumber =
+        todaysOrders.reduce(
+          (highest, order) => Math.max(highest, order.orderNumber),
+          0,
+        ) + 1;
+      await ctx.db.insert("counters", {
+        name: counterName,
+        value: orderNumber,
+      });
     }
 
-    const createdAt = Date.now();
     const changeAmount =
       args.paymentMethod === "cash" && args.givenAmount !== null
         ? args.givenAmount - total
@@ -101,6 +140,7 @@ export const submitOrder = mutationGeneric({
 
     await ctx.db.insert("orders", {
       orderNumber,
+      businessDate,
       createdAt,
       status: "completed",
       orderType: "takeaway",

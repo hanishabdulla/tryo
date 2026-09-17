@@ -5,9 +5,11 @@ import { useMemo, useState } from "react";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { OrdersReportTable } from "@/components/dashboard/OrdersReportTable";
 import { ReportSummary } from "@/components/dashboard/ReportSummary";
+import { TillSettlementSummary } from "@/components/dashboard/TillSettlementSummary";
 import { dateInputClass } from "@/components/dashboard/styles";
 import { api } from "@/lib/convex-api";
 import type { OrderRow } from "@/lib/finances-excel";
+import type { TillDaySummary } from "@/lib/till";
 import {
   localDayBoundsMs,
   parseYmdLocal,
@@ -33,6 +35,10 @@ export default function DailySummaryPage() {
     api.reports.listOrdersInRange,
     bounds ? { startMs: bounds.startMs, endMs: bounds.endMs } : "skip",
   ) as OrderRow[] | undefined;
+  const tillDay = useQuery(api.till.getDay, { businessDate: ymd }) as
+    | TillDaySummary
+    | null
+    | undefined;
 
   const rows = orders ?? [];
 
@@ -63,6 +69,8 @@ export default function DailySummaryPage() {
       </div>
 
       <ReportSummary orders={orders} />
+
+      <TillSettlementSummary day={tillDay} />
 
       <section id="daily-summary-print">
         <h2 className="mb-3 text-sm font-semibold text-zinc-300">Orders</h2>

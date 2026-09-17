@@ -53,10 +53,17 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
-          ### Receipt printing
-          - Adds the black-and-white Tryo logo to the top of customer receipts.
-          - Crops the logo's built-in whitespace so it stays crisp and compact on 80 mm thermal paper.
-          - Embeds the logo in the isolated receipt render so Windows ESC/POS and standard printer paths both include it.
+          ### Daily till and cash settlement
+          - Invoice numbers restart at #1 for each London trading day.
+          - Start each day by entering the opening cash float.
+          - Tracks cash received, customer change, cash added, cash removed, card sales and the expected drawer balance.
+          - Settle the day with a physical cash count and an automatic over/short difference.
+          - Requires an unclosed previous day to be settled before opening the next one.
+          - Adds the till settlement to Dashboard → Daily summary.
+
+          ### Customer receipt
+          - Keeps the Tryo logo but removes the duplicate Tryo heading below it.
+          - Makes the logo shorter and more compact for 80 mm thermal printers without distorting its proportions.
 
           ### Setup
           1. Download and run the `.exe` installer.

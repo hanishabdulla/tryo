@@ -8,12 +8,14 @@
  * @module
  */
 
+import type * as businessDate from "../businessDate.js";
 import type * as dashboardAuth from "../dashboardAuth.js";
 import type * as menu from "../menu.js";
 import type * as menuAdmin from "../menuAdmin.js";
 import type * as orders from "../orders.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
+import type * as till from "../till.js";
 
 import type {
   ApiFromModules,
@@ -22,12 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  businessDate: typeof businessDate;
   dashboardAuth: typeof dashboardAuth;
   menu: typeof menu;
   menuAdmin: typeof menuAdmin;
   orders: typeof orders;
   reports: typeof reports;
   seed: typeof seed;
+  till: typeof till;
 }>;
 
 /**

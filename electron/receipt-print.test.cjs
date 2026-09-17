@@ -43,15 +43,17 @@ function inkRows(image) {
 
 app.whenReady().then(async () => {
   const output = fs.mkdtempSync(path.join(os.tmpdir(), 'tryo-receipt-test-'));
+  const logo = fs.readFileSync(path.join(__dirname, '../public/menulogo.png')).toString('base64');
   const source = new BrowserWindow({ show: false });
   try {
     let previousHeight = 0;
     for (const count of [1, 60, 150]) {
       const rows = Array.from({ length: count }, (_, i) => `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>ITEM ${i + 1}</span><span>£12.34</span></div>`).join('');
-      await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body style="height:640px;overflow:hidden"><p>DO NOT PRINT THE TILL</p><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:8mm 4mm;box-sizing:border-box;font:11px/1.4 monospace">${rows}<svg width="112" height="112"><rect width="112" height="112" fill="black"/></svg><p>END OF RECEIPT</p></div></div></body></html>`));
+      await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body style="height:640px;overflow:hidden"><p>DO NOT PRINT THE TILL</p><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:8mm 4mm;box-sizing:border-box;font:11px/1.4 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div>${rows}<svg width="112" height="112"><rect width="112" height="112" fill="black"/></svg><p>END OF RECEIPT</p></div></div></body></html>`));
       const markup = await captureReceipt(source.webContents);
       assert(!markup.includes('DO NOT PRINT THE TILL'));
       assert(markup.includes('<svg'));
+      assert(markup.includes('data:image/png;base64'));
       const raw = await receiptRaster(markup);
       assert.deepEqual([...raw.subarray(-7)], [0x1b, 0x64, 6, 0x1d, 0x56, 0x42, 0]);
       const image = decodeRaster(raw);

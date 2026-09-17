@@ -46,6 +46,31 @@ export default defineSchema({
     value: v.number(),
   }).index("by_name", ["name"]),
 
+  tillSessions: defineTable({
+    businessDate: v.string(),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    openedAt: v.number(),
+    openingFloatPence: v.number(),
+    closedAt: v.optional(v.number()),
+    countedCashPence: v.optional(v.number()),
+    expectedCashPence: v.optional(v.number()),
+    variancePence: v.optional(v.number()),
+    closingNote: v.optional(v.string()),
+  })
+    .index("by_businessDate", ["businessDate"])
+    .index("by_status", ["status", "openedAt"]),
+
+  tillMovements: defineTable({
+    sessionId: v.id("tillSessions"),
+    businessDate: v.string(),
+    createdAt: v.number(),
+    type: v.union(v.literal("cash_in"), v.literal("cash_out")),
+    amountPence: v.number(),
+    reason: v.string(),
+  })
+    .index("by_session", ["sessionId", "createdAt"])
+    .index("by_businessDate", ["businessDate", "createdAt"]),
+
   // Dashboard password: PBKDF2 hash only, never the plain password.
   dashboardPassword: defineTable({
     salt: v.string(),
@@ -61,6 +86,7 @@ export default defineSchema({
 
   orders: defineTable({
     orderNumber: v.number(),
+    businessDate: v.optional(v.string()),
     createdAt: v.number(),
     status: v.string(),
     orderType: v.string(),
@@ -81,5 +107,7 @@ export default defineSchema({
     givenAmount: v.union(v.number(), v.null()),
     changeAmount: v.union(v.number(), v.null()),
     totalItemCount: v.number(),
-  }).index("by_orderNumber", ["orderNumber"]),
+  })
+    .index("by_orderNumber", ["orderNumber"])
+    .index("by_businessDate", ["businessDate"]),
 });

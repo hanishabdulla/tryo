@@ -10,11 +10,13 @@ import {
   parsePercentDiscountInput,
 } from "@/lib/discount";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
+import { todayBusinessDate, type TillDaySummary } from "@/lib/till";
 import {
   ReceiptStage,
   type ReceiptLinePrint,
   type ReceiptPayload,
 } from "./ReceiptStage";
+import { TillManager } from "./TillManager";
 
 type ItemOption = { name: string; price: number };
 
@@ -112,8 +114,6 @@ export default function PosApp() {
     return typeof v === "string" && v.length > 0 ? v : "Fries + Drink";
   }, [config]);
 
-  const businessName =
-    typeof config?.businessName === "string" ? config.businessName : "Tryo";
   const businessAddress =
     typeof config?.businessAddress === "string"
       ? config.businessAddress
@@ -124,6 +124,38 @@ export default function PosApp() {
       : "+44 7825583940";
   const businessVat =
     typeof config?.businessVat === "string" ? config.businessVat : "491891448";
+
+  const [businessDate, setBusinessDate] = useState(todayBusinessDate);
+  const todayTill = useQuery(api.till.getDay, { businessDate }) as
+    | TillDaySummary
+    | null
+    | undefined;
+  const openSession = useQuery(api.till.findOpenSession, {}) as
+    | { businessDate: string; openedAt: number }
+    | null
+    | undefined;
+  const activeTillDate =
+    todayTill || openSession === undefined
+      ? businessDate
+      : openSession?.businessDate ?? businessDate;
+  const activeTill = useQuery(api.till.getDay, {
+    businessDate: activeTillDate,
+  }) as TillDaySummary | null | undefined;
+  const tillDay =
+    todayTill === undefined || openSession === undefined
+      ? undefined
+      : todayTill ?? activeTill;
+  const tillTakingOrders =
+    tillDay?.status === "open" && tillDay.businessDate === businessDate;
+  const previousTillNeedsSettlement =
+    tillDay?.status === "open" && tillDay.businessDate !== businessDate;
+  const [tillManagerOpen, setTillManagerOpen] = useState(false);
+
+  useEffect(() => {
+    const updateDate = () => setBusinessDate(todayBusinessDate());
+    const timer = window.setInterval(updateDate, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const [cart, setCart] = useState<CartLine[]>([]);
 
@@ -151,7 +183,7 @@ export default function PosApp() {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [receiptBusy, setReceiptBusy] = useState(false);
   const receiptInFlight = useRef(false);
-  const printedOrderRef = useRef<number | null>(null);
+  const printedOrderRef = useRef<string | null>(null);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [printers, setPrinters] = useState<
     { name: string; description?: string; isDefault?: boolean }[]
@@ -231,8 +263,9 @@ export default function PosApp() {
 
   useEffect(() => {
     if (!receipt) return;
-    if (printedOrderRef.current === receipt.orderNumber) return;
-    printedOrderRef.current = receipt.orderNumber;
+    const receiptKey = `${receipt.createdAt}:${receipt.orderNumber}`;
+    if (printedOrderRef.current === receiptKey) return;
+    printedOrderRef.current = receiptKey;
     void printCurrentReceipt();
   }, [printCurrentReceipt, receipt]);
 
@@ -403,6 +436,11 @@ export default function PosApp() {
 
   const submit = useCallback(async () => {
     if (cart.length === 0) return;
+    if (!tillTakingOrders) {
+      setPayOpen(false);
+      setTillManagerOpen(true);
+      return;
+    }
     if (payMethod === "cash") {
       if (givenPence === null) return;
       if (givenPence < amountDuePence) return;
@@ -486,7 +524,6 @@ export default function PosApp() {
       totalPence: res.total,
       totalItemCount,
       paymentMethod: payMethod,
-      businessName,
       businessAddress,
       businessPhone,
       businessVat,
@@ -501,7 +538,6 @@ export default function PosApp() {
   }, [
     amountDuePence,
     businessAddress,
-    businessName,
     businessPhone,
     businessVat,
     cart,
@@ -511,6 +547,7 @@ export default function PosApp() {
     givenPence,
     payMethod,
     submitOrder,
+    tillTakingOrders,
     totalItemCount,
   ]);
 
@@ -525,7 +562,7 @@ export default function PosApp() {
             alt="Tryo"
             width={485}
             height={240}
-            priority
+            preload
             unoptimized
             className="h-9 w-auto select-none"
           />
@@ -540,6 +577,28 @@ export default function PosApp() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTillManagerOpen(true)}
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold transition-colors ${
+              tillTakingOrders
+                ? "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-200 hover:bg-emerald-500/10"
+                : "border-amber-500/25 bg-amber-500/[0.07] text-amber-200 hover:bg-amber-500/10"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                tillTakingOrders ? "bg-emerald-400" : "bg-amber-400"
+              }`}
+            />
+            {tillTakingOrders
+              ? `Till ${formatPence(tillDay.totals.expectedCashPence)}`
+              : previousTillNeedsSettlement
+                ? "Settle previous day"
+                : tillDay?.status === "closed"
+                  ? "Day closed"
+                  : "Start day"}
+          </button>
           <Link
             href="/dashboard/daily"
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
@@ -798,8 +857,12 @@ export default function PosApp() {
             </div>
             <button
               type="button"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || !tillTakingOrders}
               onClick={() => {
+                if (!tillTakingOrders) {
+                  setTillManagerOpen(true);
+                  return;
+                }
                 setPayOpen(true);
                 setPayMethod("card");
                 setGivenRaw("");
@@ -1398,6 +1461,17 @@ export default function PosApp() {
           </div>
         </div>
       ) : null}
+
+      <TillManager
+        businessDate={tillDay?.businessDate ?? activeTillDate}
+        day={tillDay}
+        isOpen={
+          tillManagerOpen ||
+          (tillDay !== undefined &&
+            (tillDay === null || previousTillNeedsSettlement))
+        }
+        onClose={() => setTillManagerOpen(false)}
+      />
 
       <ReceiptStage data={receipt} />
     </div>

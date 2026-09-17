@@ -36,7 +36,6 @@ export type ReceiptPayload = {
   totalPence: number;
   totalItemCount: number;
   paymentMethod: "card" | "cash";
-  businessName: string;
   businessAddress: string;
   businessPhone: string;
   businessVat: string;
@@ -104,7 +103,7 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
         <div
           aria-hidden="true"
           className="mx-auto mb-1"
-          style={{ width: "56mm", height: "20mm", overflow: "hidden" }}
+          style={{ width: "48mm", height: "16.5mm", overflow: "hidden" }}
         >
           <Image
             src="/menulogo.png"
@@ -115,13 +114,12 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
             unoptimized
             style={{
               display: "block",
-              width: "56mm",
-              height: "56mm",
-              transform: "translateY(-18mm)",
+              width: "48mm",
+              height: "48mm",
+              transform: "translateY(-16mm)",
             }}
           />
         </div>
-        <div className="mb-1 text-center text-[20px] font-bold leading-tight">{data.businessName}</div>
         <div className="text-center">{data.businessAddress}</div>
         <div className="text-center">Phone: {data.businessPhone}</div>
         <div className="text-center">VAT Number: {data.businessVat}</div>
