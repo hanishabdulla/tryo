@@ -1,4 +1,7 @@
-import * as XLSX from "xlsx";
+import writeExcelFile, {
+  type Cell,
+  type SheetData,
+} from "write-excel-file/browser";
 import { formatPence } from "@/lib/money";
 import { formatTsLocal } from "@/lib/report-dates";
 
@@ -46,7 +49,34 @@ function discountLabel(o: OrderRow): string {
   return String(mode);
 }
 
-export function buildFinancesWorkbook(orders: OrderRow[]): XLSX.WorkBook {
+type ExportRow = Record<string, string | number | boolean>;
+
+const HEADER_STYLE = {
+  fontWeight: "bold" as const,
+  backgroundColor: "#E7F5EF",
+};
+
+function rowsToSheet(headers: string[], rows: ExportRow[]): SheetData {
+  const headerRow: Cell[] = headers.map((value) => ({
+    value,
+    ...HEADER_STYLE,
+  }));
+
+  return [
+    headerRow,
+    ...rows.map((row) =>
+      headers.map((header): Cell => {
+        const value = row[header] ?? "";
+        if (header.endsWith("GBP") && typeof value === "number") {
+          return { value, type: Number, format: "£#,##0.00" };
+        }
+        return value;
+      }),
+    ),
+  ];
+}
+
+export function buildFinancesWorkbook(orders: OrderRow[]) {
   const orderRows = orders.map((o, i) => ({
     SN: i + 1,
     OrderNo: o.orderNumber,
@@ -97,31 +127,70 @@ export function buildFinancesWorkbook(orders: OrderRow[]): XLSX.WorkBook {
     }
   }
 
-  const wb = XLSX.utils.book_new();
-  const wsOrders = XLSX.utils.json_to_sheet(orderRows);
-  XLSX.utils.book_append_sheet(wb, wsOrders, "Orders");
-
-  const wsLines =
-    lineRows.length > 0
-      ? XLSX.utils.json_to_sheet(lineRows)
-      : XLSX.utils.json_to_sheet([{ Note: "No line items in range" }]);
-  XLSX.utils.book_append_sheet(wb, wsLines, "Line items");
-
   const totalPence = orders.reduce((s, o) => s + o.total, 0);
-  const wsSummary = XLSX.utils.json_to_sheet([
+  const summaryRows: ExportRow[] = [
     { Metric: "Order count", Value: orders.length },
     { Metric: "Gross total (sum of order totals) GBP", Value: penceToPoundsCell(totalPence) },
-  ]);
-  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+  ];
 
-  return wb;
+  const orderHeaders = Object.keys(orderRows[0] ?? {
+    SN: "",
+    OrderNo: "",
+    DateTime: "",
+    CreatedAtMs: "",
+    Status: "",
+    OrderType: "",
+    SubtotalGBP: "",
+    DiscountMode: "",
+    DiscountInput: "",
+    DiscountAmountGBP: "",
+    DeliveryFeeGBP: "",
+    TotalGBP: "",
+    PaymentMethod: "",
+    GivenGBP: "",
+    ChangeGBP: "",
+    ItemCount: "",
+    DiscountLabel: "",
+  });
+  const lineHeaders = [
+    "OrderNo",
+    "DateTime",
+    "ItemName",
+    "Quantity",
+    "UnitPriceGBP",
+    "LineTotalGBP",
+    "IsMeal",
+    "MealLabel",
+    "Extras",
+  ];
+
+  return [
+    {
+      sheet: "Orders",
+      data: rowsToSheet(orderHeaders, orderRows),
+      stickyRowsCount: 1,
+    },
+    {
+      sheet: "Line items",
+      data:
+        lineRows.length > 0
+          ? rowsToSheet(lineHeaders, lineRows)
+          : rowsToSheet(["Note"], [{ Note: "No line items in range" }]),
+      stickyRowsCount: 1,
+    },
+    {
+      sheet: "Summary",
+      data: rowsToSheet(["Metric", "Value"], summaryRows),
+      stickyRowsCount: 1,
+    },
+  ];
 }
 
-export function downloadFinancesXlsx(
+export async function downloadFinancesXlsx(
   orders: OrderRow[],
   filenameBase: string,
-): void {
+): Promise<void> {
   const wb = buildFinancesWorkbook(orders);
   const safe = filenameBase.replace(/[^\w.-]+/g, "_");
-  XLSX.writeFile(wb, `${safe}.xlsx`);
+  await writeExcelFile(wb).toFile(`${safe}.xlsx`);
 }

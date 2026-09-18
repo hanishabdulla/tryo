@@ -18,8 +18,21 @@ export function ExportButtons({
   period: string;
 }) {
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [xlsxBusy, setXlsxBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const empty = orders.length === 0;
+
+  async function downloadXlsx() {
+    setXlsxBusy(true);
+    setError(null);
+    try {
+      await downloadFinancesXlsx(orders, filenameBase);
+    } catch {
+      setError("Could not create the Excel file. Try again.");
+    } finally {
+      setXlsxBusy(false);
+    }
+  }
 
   async function downloadPdf() {
     setPdfBusy(true);
@@ -39,12 +52,12 @@ export function ExportButtons({
       <div className="flex gap-2">
         <button
           type="button"
-          disabled={empty}
-          onClick={() => downloadFinancesXlsx(orders, filenameBase)}
+          disabled={empty || xlsxBusy}
+          onClick={() => void downloadXlsx()}
           className={secondary}
         >
           <span className="rounded bg-emerald-500/15 px-1 text-[10px] font-bold text-emerald-300">XLS</span>
-          Excel
+          {xlsxBusy ? "Creating…" : "Excel"}
         </button>
         <button
           type="button"
