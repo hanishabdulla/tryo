@@ -53,15 +53,19 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
-          ### Invoice numbering
-          - The first invoice after opening each day's till is now #01.
-          - Invoice numbering is tied to the daily till session so an upgrade cannot inherit the old global sequence.
+          ### Receipt choice
+          - Checkout now offers **Kitchen + customer** or **Kitchen only**.
+          - The kitchen ticket always prints, avoiding unnecessary customer receipts when one is not wanted.
+          - **Reprint last** follows the receipt choice made for that order.
 
-          ### Customer receipt
-          - Prints invoice numbers with two digits, starting at #01.
-          - Keeps the total and thank-you footer safely inside the printable receipt area.
-          - Uses a more compact layout and adds extra feed space before cutting.
-          - Refuses to print an incomplete customer receipt if the total or footer is missing from the rendered document.
+          ### Cleaner totals
+          - The final total always prints.
+          - Subtotal, discount and delivery rows only appear when they are relevant.
+          - Zero-value delivery fees are no longer printed.
+
+          ### Production and exports
+          - Connects to the Tryo production Convex deployment.
+          - Replaces the vulnerable legacy spreadsheet package used by dashboard Excel exports.
 
           ### Setup
           1. Download and run the `.exe` installer.
@@ -69,6 +73,6 @@ jobs:
           3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
           4. Save the printer. Completed orders then print silently and **Reprint last** remains available.
 
-          This build uses the configured Convex deployment and requires an internet connection.
+          This build uses the production Convex deployment and requires an internet connection.
           "@
           gh release create $env:GITHUB_REF_NAME $assets --title "Tryo POS $env:GITHUB_REF_NAME" --notes $notes
