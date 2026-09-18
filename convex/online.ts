@@ -1,5 +1,5 @@
-import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import { businessDateAt } from "./businessDate";
 
 /**
@@ -43,7 +43,7 @@ const DRINK_CATEGORIES = new Set(["Drinks", "Mocktails", "Lemonade"]);
 const MAX_LINES = 40;
 const MAX_QUANTITY_PER_LINE = 20;
 
-export const placeOnlineOrder = mutationGeneric({
+export const placeOnlineOrder = mutation({
   args: {
     items: v.array(orderLine),
     totalItemCount: v.number(),
@@ -206,7 +206,7 @@ export const placeOnlineOrder = mutationGeneric({
 });
 
 /** Live queue of web orders the kitchen hasn't finished, newest last. */
-export const listLiveOnlineOrders = queryGeneric({
+export const listLiveOnlineOrders = query({
   args: {},
   returns: v.array(v.any()),
   handler: async (ctx) => {
@@ -223,7 +223,7 @@ export const listLiveOnlineOrders = queryGeneric({
 });
 
 /** Status lookup for the customer's confirmation screen. */
-export const getOnlineOrder = queryGeneric({
+export const getOnlineOrder = query({
   args: { orderNumber: v.number() },
   returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
@@ -246,7 +246,7 @@ export const getOnlineOrder = queryGeneric({
 });
 
 /** Moves a web order along from the till. */
-export const setOnlineOrderStatus = mutationGeneric({
+export const setOnlineOrderStatus = mutation({
   args: {
     orderNumber: v.number(),
     status: v.union(
