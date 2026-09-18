@@ -33,6 +33,9 @@ jobs:
       - name: Build Windows installer
         run: npm run electron:dist -w @tryo/pos -- --win --x64 --publish never
 
+      - name: Verify packaged app server starts
+        run: npm run test:package -w @tryo/pos
+
       - name: Verify receipt layout and Windows spooler bridge
         run: npm run test:receipt -w @tryo/pos
 
@@ -52,6 +55,10 @@ jobs:
           $assets = (Get-ChildItem apps/pos/release/*.exe, apps/pos/release/*.blockmap).FullName
           $notes = @"
           ## Tryo POS for Windows
+
+          ### Desktop startup
+          - Fixes the packaged monorepo server path that prevented the Windows app from opening.
+          - Verifies the embedded production server starts before a release is published.
 
           ### Receipt choice
           - Checkout now offers **Kitchen + customer** or **Kitchen only**.

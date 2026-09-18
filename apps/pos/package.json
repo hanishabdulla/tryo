@@ -1,6 +1,6 @@
 {
   "name": "@tryo/pos",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
   "description": "Tryo takeaway point of sale",
   "author": "Tryo",
@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:receipt": "electron electron/receipt-print.test.cjs",
+    "test:package": "node electron/package-smoke.test.cjs",
     "electron:dev": "concurrently -k \"next dev -p 43123\" \"wait-on http://127.0.0.1:43123 && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=1 electron .\"",
     "electron:start": "npm run build && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=0 electron .",
     "electron:pack": "npm run build && electron-builder --dir",
@@ -64,11 +65,11 @@
       },
       {
         "from": ".next/static",
-        "to": "next-server/standalone/.next/static"
+        "to": "next-server/standalone/apps/pos/.next/static"
       },
       {
         "from": "public",
-        "to": "next-server/standalone/public"
+        "to": "next-server/standalone/apps/pos/public"
       }
     ],
     "mac": {

@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const fs = require("fs");
 const http = require("http");
 const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
 const { captureReceipt, printReceipt } = require("./receipt-print.cjs");
+const { packagedAppDirectory } = require("./runtime-paths.cjs");
 
 const IS_DEV = process.env.ELECTRON_DEV === "1";
 const DEFAULT_DEV_PORT = 43123;
@@ -152,7 +153,8 @@ async function startNextProduction() {
   };
 
   if (app.isPackaged) {
-    cwd = path.join(process.resourcesPath, "next-server", "standalone");
+    // Standalone output preserves the npm workspace path in a monorepo.
+    cwd = packagedAppDirectory(process.resourcesPath);
     script = path.join(cwd, "server.js");
     args = [script];
   } else {
@@ -408,6 +410,10 @@ if (!gotLock) {
       }
     } catch (error) {
       console.error(error);
+      dialog.showErrorBox(
+        "Tryo POS could not start",
+        error instanceof Error ? error.message : String(error),
+      );
       app.quit();
       return;
     }
