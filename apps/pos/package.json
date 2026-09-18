@@ -1,0 +1,93 @@
+{
+  "name": "@tryo/pos",
+  "version": "0.1.12",
+  "private": true,
+  "description": "Tryo takeaway point of sale",
+  "author": "Tryo",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test:receipt": "electron electron/receipt-print.test.cjs",
+    "electron:dev": "concurrently -k \"next dev -p 43123\" \"wait-on http://127.0.0.1:43123 && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=1 electron .\"",
+    "electron:start": "npm run build && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_DEV=0 electron .",
+    "electron:pack": "npm run build && electron-builder --dir",
+    "electron:dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "convex": "^1.35.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "next": "^16.3.5",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^44.4.1",
+    "electron-builder": "^26.15.3",
+    "eslint": "^9",
+    "eslint-config-next": "^16.3.5",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.tryo.pos",
+    "productName": "Tryo POS",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "electron/**/*",
+      "!electron/**/*.test.cjs",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next",
+        "to": "next-server",
+        "filter": [
+          "standalone/**/*"
+        ]
+      },
+      {
+        "from": ".next/static",
+        "to": "next-server/standalone/.next/static"
+      },
+      {
+        "from": "public",
+        "to": "next-server/standalone/public"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Office",
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}

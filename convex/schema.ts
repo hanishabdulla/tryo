@@ -107,7 +107,24 @@ export default defineSchema({
     givenAmount: v.union(v.number(), v.null()),
     changeAmount: v.union(v.number(), v.null()),
     totalItemCount: v.number(),
+
+    // --- Online orders (tryoeats.uk) ---------------------------------------
+    // Every field below is optional so that orders rung up on the till, which
+    // never set them, still validate against this schema.
+
+    /** "till" for counter orders, "web" for ones placed on the website. */
+    source: v.optional(v.string()),
+    /** "collection" | "delivery". Only set on web orders. */
+    fulfilment: v.optional(v.string()),
+    customerName: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+    customerAddress: v.optional(v.union(v.string(), v.null())),
+    customerNote: v.optional(v.union(v.string(), v.null())),
+    /** When the kitchen last moved this order along, for the POS queue. */
+    statusUpdatedAt: v.optional(v.number()),
   })
     .index("by_orderNumber", ["orderNumber"])
-    .index("by_businessDate", ["businessDate"]),
+    .index("by_businessDate", ["businessDate"])
+    // Lets the till subscribe to just the live web queue.
+    .index("by_source_status", ["source", "status", "createdAt"]),
 });

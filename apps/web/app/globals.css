@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+/*
+  Tryo Eats — "Legendary flavour, charred to perfection".
+  The brand palette is green #00955E and gold #ECB100. Everything else is charcoal and ember, so the food photography and
+  those two brand colours are the only saturated things on the page.
+*/
+@theme {
+  --color-char-950: #070807;
+  --color-char-900: #0b0c0b;
+  --color-char-850: #111311;
+  --color-char-800: #171a17;
+  --color-char-700: #232722;
+  --color-char-600: #343a33;
+  --color-char-400: #7b857a;
+  --color-char-200: #c3ccc1;
+  --color-char-50: #f6f8f5;
+
+  /* Brand green. `brand` is the sheet value; `lime` is the on-dark variant that
+     clears 4.5:1 against char-900 (the sheet green alone does not). */
+  --color-brand: #00955e;
+  --color-brand-deep: #00734a;
+  --color-lime: #19c980;
+  --color-lime-soft: #6fe3b0;
+
+  /* Brand gold. `gold` is the sheet value, already AA on charcoal. */
+  --color-gold: #ecb100;
+  --color-gold-soft: #ffd451;
+
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.75rem;
+
+  --animate-marquee: marquee 42s linear infinite;
+  --animate-marquee-slow: marquee 64s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
+  --animate-shimmer: shimmer 2.2s linear infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-bump: bump 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-14px) rotate(1.5deg); }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html {
+  scroll-behavior: smooth;
+  /* The sticky category rail parks items under the header when you jump to a section. */
+  scroll-padding-top: 8.5rem;
+  background-color: var(--color-char-950);
+  -webkit-text-size-adjust: 100%;
+  /* Belt-and-braces against sideways scroll: `overflow-x` on body alone does not
+     stop the document itself from widening. */
+  overflow-x: clip;
+}
+
+body {
+  background-color: var(--color-char-950);
+  color: var(--color-char-50);
+  font-family: var(--font-sans);
+  overflow-x: clip;
+  /* Keeps the fixed cart bar clear of the iOS home indicator. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile touch behaviour. `manipulation` drops the 300ms double-tap-to-zoom
+   delay on taps, and the grey flash on tap reads as a bug on a dark UI. */
+button,
+a,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background-color: var(--color-gold);
+  color: var(--color-char-950);
+}
+
+/* Focus ring that stays visible on both the charcoal and the gold surfaces. */
+:focus-visible {
+  outline: 2px solid var(--color-gold-soft);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@layer utilities {
+  /* Film-grain overlay. Applied once on the body wrapper, not per-section, so it
+     stays a single composited layer. */
+  .grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.16;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* Gold foil gradient for the display headings. */
+  .foil {
+    background-image: linear-gradient(103deg, #ffe89a 4%, var(--color-gold) 34%, #fff3c4 52%, var(--color-gold) 68%, #c98f00 96%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ember-glow {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-gold) 26%, transparent),
+      0 18px 60px -22px color-mix(in oklab, var(--color-gold) 62%, transparent);
+  }
+
+  .green-glow {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-lime) 30%, transparent),
+      0 18px 60px -22px color-mix(in oklab, var(--color-lime) 55%, transparent);
+  }
+
+  /* Hides the scrollbar on the horizontal category rail and dish carousel. */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Stops a scroll that reaches the end of a drawer or sheet from chaining to
+     the page behind it, and kills iOS rubber-band scroll inside modals. */
+  .scroll-lock {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reveal-on-scroll. `data-reveal` starts hidden; the observer flips it to
+     `data-shown` (see components/reveal.tsx). */
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(28px);
+    transition:
+      opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  [data-reveal][data-shown="true"] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  [data-reveal] { opacity: 1; transform: none; }
+}
