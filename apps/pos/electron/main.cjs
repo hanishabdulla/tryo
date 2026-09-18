@@ -219,7 +219,7 @@ function createMainWindow() {
 }
 
 function setupPrintIpc() {
-  ipcMain.handle("receipt-print-silent", async (event) => {
+  ipcMain.handle("receipt-print-silent", async (event, options = {}) => {
     if (!isTrustedSender(event.senderFrame)) {
       return { ok: false, error: "Untrusted print request" };
     }
@@ -228,10 +228,13 @@ function setupPrintIpc() {
     const printer = receiptPrinterName();
     if (!printer) return { ok: false, error: "Missing printer name" };
     try {
-      // Kitchen ticket first so preparation starts while the customer copy prints.
+      const customerCopy = options?.customerCopy !== false;
+      // The kitchen ticket always prints so preparation starts immediately.
       const kitchen = await captureReceipt(event.sender, ".kitchen-ticket");
-      const customer = await captureReceipt(event.sender, ".receipt-paper");
       const kitchenResult = await printReceipt(kitchen, printer);
+      if (!customerCopy) return kitchenResult;
+
+      const customer = await captureReceipt(event.sender, ".receipt-paper");
       const customerResult = await printReceipt(customer, printer);
       const errors = [
         kitchenResult.ok ? "" : `Kitchen ticket: ${kitchenResult.error}`,

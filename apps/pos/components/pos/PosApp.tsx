@@ -176,6 +176,7 @@ export default function PosApp() {
     "percentage",
   );
   const [discountRaw, setDiscountRaw] = useState("");
+  const [printCustomerReceipt, setPrintCustomerReceipt] = useState(true);
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
   const [orderBusy, setOrderBusy] = useState(false);
@@ -226,7 +227,7 @@ export default function PosApp() {
     void electron.getReceiptPrinter().then(setConfiguredPrinter).catch(() => {});
   }, []);
 
-  const printCurrentReceipt = useCallback(async () => {
+  const printCurrentReceipt = useCallback(async (customerCopy = true) => {
     if (receiptInFlight.current) return false;
     receiptInFlight.current = true;
     setReceiptBusy(true);
@@ -244,7 +245,7 @@ export default function PosApp() {
       setPrinterMessage("Choose and test a receipt printer before taking orders.");
       return false;
     }
-    const result = await electron.printReceiptSilent();
+    const result = await electron.printReceiptSilent({ customerCopy });
     if (!result.ok) {
       setPrinterMessage(result.error || "Receipt printing failed.");
       setPrinterOpen(true);
@@ -266,7 +267,7 @@ export default function PosApp() {
     const receiptKey = `${receipt.createdAt}:${receipt.orderNumber}`;
     if (printedOrderRef.current === receiptKey) return;
     printedOrderRef.current = receiptKey;
-    void printCurrentReceipt();
+    void printCurrentReceipt(receipt.printCustomerReceipt);
   }, [printCurrentReceipt, receipt]);
 
   const cartSubtotalPence = useMemo(
@@ -524,6 +525,7 @@ export default function PosApp() {
       totalPence: res.total,
       totalItemCount,
       paymentMethod: payMethod,
+      printCustomerReceipt,
       businessAddress,
       businessPhone,
       businessVat,
@@ -535,6 +537,7 @@ export default function PosApp() {
     setPayMethod("card");
     setDiscountKind("percentage");
     setDiscountRaw("");
+    setPrintCustomerReceipt(true);
   }, [
     amountDuePence,
     businessAddress,
@@ -546,6 +549,7 @@ export default function PosApp() {
     discountRaw,
     givenPence,
     payMethod,
+    printCustomerReceipt,
     submitOrder,
     tillTakingOrders,
     totalItemCount,
@@ -639,7 +643,9 @@ export default function PosApp() {
           <button
             type="button"
             disabled={!receipt || receiptBusy}
-            onClick={() => void printCurrentReceipt()}
+            onClick={() =>
+              void printCurrentReceipt(receipt?.printCustomerReceipt ?? true)
+            }
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {receiptBusy ? "Printing…" : "Reprint last"}
@@ -1073,7 +1079,7 @@ export default function PosApp() {
           aria-modal="true"
           aria-labelledby="custom-item-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
               <h2
                 id="custom-item-title"
@@ -1279,6 +1285,41 @@ export default function PosApp() {
               >
                 Cash
               </button>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                Receipt
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                The kitchen ticket always prints.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPrintCustomerReceipt(true)}
+                  className={[
+                    "min-h-14 rounded-2xl border px-3 text-sm font-bold",
+                    printCustomerReceipt
+                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Kitchen + customer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintCustomerReceipt(false)}
+                  className={[
+                    "min-h-14 rounded-2xl border px-3 text-sm font-bold",
+                    !printCustomerReceipt
+                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  Kitchen only
+                </button>
+              </div>
             </div>
 
             {payMethod === "cash" ? (

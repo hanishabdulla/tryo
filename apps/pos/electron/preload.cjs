@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld("tryoElectron", {
   testReceiptPrinter: (deviceName) =>
     ipcRenderer.invoke("print:testReceiptPrinter", deviceName),
   /** Print the current window (uses #receipt-print-root @media print CSS). */
-  printReceiptSilent: () => ipcRenderer.invoke("receipt-print-silent"),
+  printReceiptSilent: (options) =>
+    ipcRenderer.invoke("receipt-print-silent", options),
 });
 
 contextBridge.exposeInMainWorld("tryoMenuPrint", {

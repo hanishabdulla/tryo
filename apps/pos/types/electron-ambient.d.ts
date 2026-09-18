@@ -17,7 +17,9 @@ declare global {
       getReceiptPrinter: () => Promise<string>;
       setReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
       testReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
-      printReceiptSilent: () => Promise<ReceiptPrintResult>;
+      printReceiptSilent: (options?: {
+        customerCopy?: boolean;
+      }) => Promise<ReceiptPrintResult>;
     };
     tryoMenuPrint?: {
       signalReady: () => void;

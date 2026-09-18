@@ -36,6 +36,8 @@ export type ReceiptPayload = {
   totalPence: number;
   totalItemCount: number;
   paymentMethod: "card" | "cash";
+  /** Whether this order should print a customer copy as well as the kitchen ticket. */
+  printCustomerReceipt: boolean;
   businessAddress: string;
   businessPhone: string;
   businessVat: string;
@@ -102,8 +104,17 @@ function KitchenTicket({ data }: { data: ReceiptPayload }) {
 }
 
 export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
+  const hasAdjustments = Boolean(
+    data && (data.discountAmountPence > 0 || data.deliveryFeePence > 0),
+  );
+
   return (
-    <div id="receipt-print-root" className="receipt-stage" aria-hidden={!data}>
+    <div
+      id="receipt-print-root"
+      className="receipt-stage"
+      aria-hidden={!data}
+      data-customer-copy={data?.printCustomerReceipt ?? true}
+    >
       {data ? (
         <div className="receipt-paper font-mono text-[11px] leading-snug text-black">
         <div
@@ -187,10 +198,12 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
           </div>
         ))}
         <div className="my-1 border-t border-dashed border-black" />
-        <div className="flex justify-between gap-2">
-          <span>Sub Total:</span>
-          <span>{formatPence(data.subtotalPence)}</span>
-        </div>
+        {hasAdjustments ? (
+          <div className="flex justify-between gap-2">
+            <span>Sub Total:</span>
+            <span>{formatPence(data.subtotalPence)}</span>
+          </div>
+        ) : null}
         {data.discountAmountPence > 0 && data.discountLabel ? (
           <div className="flex justify-between gap-2">
             <span className="min-w-0 pr-2">{data.discountLabel}</span>
@@ -199,10 +212,12 @@ export function ReceiptStage({ data }: { data: ReceiptPayload | null }) {
             </span>
           </div>
         ) : null}
-        <div className="flex justify-between gap-2">
-          <span>Delivery Fee:</span>
-          <span>£0.00</span>
-        </div>
+        {data.deliveryFeePence > 0 ? (
+          <div className="flex justify-between gap-2">
+            <span>Delivery Fee:</span>
+            <span>{formatPence(data.deliveryFeePence)}</span>
+          </div>
+        ) : null}
         <div
           className="flex justify-between gap-2 text-[12px] font-bold"
           data-receipt-total
