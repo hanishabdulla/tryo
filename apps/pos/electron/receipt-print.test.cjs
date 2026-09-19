@@ -1,20 +1,33 @@
 // Run with Electron: exercises Chromium layout and the real receipt print module.
-const { app, BrowserWindow, nativeImage } = require('electron');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { captureReceipt, prepareReceiptWindow, receiptRaster, printReceipt } = require('./receipt-print.cjs');
-const { encodeReceipt } = require('./escpos.cjs');
-const { sendRawReceipt } = require('./windows-raw.cjs');
+//
+//   npm run test:receipt
+//
+// Every case rasterises a ticket the way the Windows till does, decodes the
+// ESC/POS bytes back into an image, and then reads the image: nothing passes on
+// the strength of the markup alone. The point of the suite is the property that
+// broke in the shop — a ticket that prints must print whole.
+const { app, nativeImage } = require("electron");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {
+  prepareReceiptWindow,
+  receiptRaster,
+  printReceipt,
+  PRINTER_DOTS,
+} = require("./receipt-print.cjs");
+const { encodeReceipt } = require("./escpos.cjs");
+const { sendRawReceipt } = require("./windows-raw.cjs");
+const { buildReceiptDocument } = require("./receipt-document.test-build.cjs");
 
 // Turn GS v 0 bands back into an image, so tests check the bytes the printer receives.
 function decodeRaster(raw) {
   const bands = [];
-  for (let i = 0; i < raw.length - 7; i++) {
+  for (let i = 0; i < raw.length - 7; i += 1) {
     if (raw[i] !== 0x1d || raw[i + 1] !== 0x76 || raw[i + 2] !== 0x30) continue;
-    const stride = raw[i + 4] | raw[i + 5] << 8;
-    const rows = raw[i + 6] | raw[i + 7] << 8;
+    const stride = raw[i + 4] | (raw[i + 5] << 8);
+    const rows = raw[i + 6] | (raw[i + 7] << 8);
     bands.push({ stride, rows, data: raw.subarray(i + 8, i + 8 + stride * rows) });
     i += 7 + stride * rows;
   }
@@ -23,8 +36,13 @@ function decodeRaster(raw) {
   const bitmap = Buffer.alloc(width * height * 4, 255);
   let y0 = 0;
   for (const band of bands) {
-    for (let y = 0; y < band.rows; y++) for (let x = 0; x < width; x++) {
-      if (band.data[y * band.stride + (x >> 3)] & (0x80 >> (x % 8))) bitmap.fill(0, ((y0 + y) * width + x) * 4, ((y0 + y) * width + x) * 4 + 3);
+    for (let y = 0; y < band.rows; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (band.data[y * band.stride + (x >> 3)] & (0x80 >> x % 8)) {
+          const at = ((y0 + y) * width + x) * 4;
+          bitmap.fill(0, at, at + 3);
+        }
+      }
     }
     y0 += band.rows;
   }
@@ -35,98 +53,340 @@ function inkRows(image) {
   const { width, height } = image.getSize();
   const bitmap = image.toBitmap();
   const rows = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) if (bitmap[(y * width + x) * 4] === 0) { rows.push(y); break; }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (bitmap[(y * width + x) * 4] === 0) {
+        rows.push(y);
+        break;
+      }
+    }
   }
   return rows;
 }
 
+/** Rows of ink, top to bottom, grouped into the visual lines a reader sees. */
+function inkLines(image) {
+  const rows = inkRows(image);
+  const lines = [];
+  for (const y of rows) {
+    const last = lines[lines.length - 1];
+    if (last && y === last.bottom + 1) last.bottom = y;
+    else lines.push({ top: y, bottom: y });
+  }
+  return lines;
+}
+
+/**
+ * Read the ticket back as text. Optical character recognition is out of scope,
+ * so instead each ticket is rendered twice — once whole, once with one line
+ * removed — and the two rasters are compared. Any line that fails to change the
+ * image was never printed.
+ */
+async function rasterOf(payload, kind, options) {
+  const raw = await receiptRaster(buildReceiptDocument(payload, kind, options));
+  return decodeRaster(raw);
+}
+
+const ORDER_FROM_THE_SHOP = {
+  orderNumber: 6,
+  createdAt: new Date(2026, 8, 19, 12, 38, 0).getTime(),
+  lines: [
+    { name: "Classic Popcorn Chicken Combo", quantity: 2, baseLineTotalPence: 1798, isMeal: false, mealLabel: null, mealLineTotalPence: 0 },
+    { name: "Mexican Rice Bowl", quantity: 1, baseLineTotalPence: 799, isMeal: false, mealLabel: null, mealLineTotalPence: 0 },
+    { name: "Raspberry Lemonade", quantity: 2, baseLineTotalPence: 798, isMeal: false, mealLabel: null, mealLineTotalPence: 0 },
+    { name: "Soft Drinks", quantity: 4, baseLineTotalPence: 600, isMeal: false, mealLabel: null, mealLineTotalPence: 0 },
+    { name: "Korean Popcorn chicken Combo", quantity: 1, baseLineTotalPence: 899, isMeal: false, mealLabel: null, mealLineTotalPence: 0 },
+    { name: "Double Trouble Burger", quantity: 1, baseLineTotalPence: 899, isMeal: true, mealLabel: "Fries + Drink", mealLineTotalPence: 299 },
+    { name: "Dirty Burger", quantity: 1, baseLineTotalPence: 1099, isMeal: true, mealLabel: "Fries + Drink", mealLineTotalPence: 299 },
+  ],
+  subtotalPence: 7490,
+  discountLabel: null,
+  discountAmountPence: 0,
+  deliveryFeePence: 0,
+  totalPence: 7490,
+  totalItemCount: 12,
+  paymentMethod: "card",
+  printCustomerReceipt: true,
+  businessAddress: "Rushden Lakes, FC3, Rushden, Northamptonshire",
+  businessPhone: "+44 7825583940",
+  businessVat: "491891448",
+};
+
+function payloadWith(overrides) {
+  return { ...ORDER_FROM_THE_SHOP, ...overrides };
+}
+
+function longOrder(count) {
+  const lines = Array.from({ length: count }, (_, i) => ({
+    name: `Test Item Number ${i + 1} With A Deliberately Long Name`,
+    quantity: (i % 3) + 1,
+    baseLineTotalPence: 899 * ((i % 3) + 1),
+    isMeal: i % 4 === 0,
+    mealLabel: i % 4 === 0 ? "Fries + Drink" : null,
+    mealLineTotalPence: i % 4 === 0 ? 299 * ((i % 3) + 1) : 0,
+    note: i % 5 === 0 ? "No salt, extra crispy, sauce on the side please" : undefined,
+  }));
+  return payloadWith({
+    lines,
+    totalItemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
+    subtotalPence: lines.reduce((sum, line) => sum + line.baseLineTotalPence, 0),
+    totalPence: lines.reduce((sum, line) => sum + line.baseLineTotalPence, 0),
+  });
+}
+
 app.whenReady().then(async () => {
-  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'tryo-receipt-test-'));
-  const logo = fs.readFileSync(path.join(__dirname, '../public/menulogo.png')).toString('base64');
-  const source = new BrowserWindow({ show: false });
-  try {
-    let previousHeight = 0;
-    for (const count of [1, 60, 150]) {
-      const rows = Array.from({ length: count }, (_, i) => `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>ITEM ${i + 1}</span><span>£12.34</span></div>`).join('');
-      await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body style="height:640px;overflow:hidden"><p>DO NOT PRINT THE TILL</p><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:8mm 4mm;box-sizing:border-box;font:11px/1.4 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div>${rows}<svg width="112" height="112"><rect width="112" height="112" fill="black"/></svg><div data-receipt-total>TOTAL: £12.34</div><p data-receipt-footer>END OF RECEIPT</p></div></div></body></html>`));
-      const markup = await captureReceipt(source.webContents);
-      assert(!markup.includes('DO NOT PRINT THE TILL'));
-      assert(markup.includes('<svg'));
-      assert(markup.includes('data:image/png;base64'));
-      const raw = await receiptRaster(markup);
-      assert.deepEqual([...raw.subarray(-7)], [0x1b, 0x64, 6, 0x1d, 0x56, 0x42, 0]);
-      const image = decodeRaster(raw);
-      assert.equal(image.getSize().width, 576);
-      fs.writeFileSync(path.join(output, `receipt-${count}.png`), image.toPNG());
-      // The last line must survive before the intentional paper/feed safety margin.
-      assert(Math.max(...inkRows(image)) > image.getSize().height - 300, `bottom of receipt missing: ${output}`);
-      const { win, pageSize } = await prepareReceiptWindow(markup);
-      try {
-        assert.equal(pageSize.width, 80000);
-        assert(pageSize.height > previousHeight);
-        previousHeight = pageSize.height;
-        const pdf = await win.webContents.printToPDF({ preferCSSPageSize: true, printBackground: true,
-          pageSize: { width: pageSize.width / 25400, height: pageSize.height / 25400 },
-          margins: { top: 0, bottom: 0, left: 0, right: 0 } });
-        // Chromium's PDF page objects are uncompressed. A long order must remain one page.
-        assert.equal((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length, 1);
-        console.log(`PASS ${count} lines: ESC/POS ${image.getSize().height} dots; PDF one 80mm × ${pageSize.height / 1000}mm page`);
-      } finally { win.destroy(); }
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), "tryo-receipt-test-"));
+  const logo = `data:image/png;base64,${fs
+    .readFileSync(path.join(__dirname, "../public/menulogo.png"))
+    .toString("base64")}`;
+
+  // 1. The order that printed short in the shop. Every line has to survive, and
+  //    dropping any one of them has to change what comes out of the encoder.
+  const fullKitchen = await rasterOf(ORDER_FROM_THE_SHOP, "kitchen");
+  fs.writeFileSync(path.join(output, "kitchen-order-6.png"), fullKitchen.toPNG());
+  const fullLines = inkLines(fullKitchen).length;
+  assert.equal(fullKitchen.getSize().width, PRINTER_DOTS);
+  for (let index = 0; index < ORDER_FROM_THE_SHOP.lines.length; index += 1) {
+    const withoutOne = payloadWith({
+      lines: ORDER_FROM_THE_SHOP.lines.filter((_, i) => i !== index),
+    });
+    const shorter = await rasterOf(withoutOne, "kitchen");
+    assert(
+      inkLines(shorter).length < fullLines,
+      `kitchen ticket did not print line ${index + 1} (${ORDER_FROM_THE_SHOP.lines[index].name})`,
+    );
+  }
+  console.log(
+    `PASS kitchen ticket for order #6: ${fullKitchen.getSize().height} dots, all 7 lines printed`,
+  );
+
+  // 2. The end bar is the last thing on the paper, and it is really there.
+  const lastKitchenLine = inkLines(fullKitchen).at(-1);
+  assert(
+    lastKitchenLine.bottom - lastKitchenLine.top >= 3,
+    "the solid end bar is missing from the kitchen ticket",
+  );
+  assert(
+    lastKitchenLine.bottom < fullKitchen.getSize().height - 40,
+    "the end bar is too close to the cut",
+  );
+
+  // 3. Customer copy: money, discount and footer all reach the paper.
+  const discounted = payloadWith({
+    discountLabel: "Discount (10%):",
+    discountAmountPence: 749,
+    totalPence: 6741,
+  });
+  const customer = await rasterOf(discounted, "customer", { logoDataUrl: logo });
+  fs.writeFileSync(path.join(output, "customer-order-6.png"), customer.toPNG());
+  const plainCustomer = await rasterOf(
+    payloadWith({ discountLabel: null, discountAmountPence: 0 }),
+    "customer",
+    { logoDataUrl: logo },
+  );
+  assert(
+    inkLines(customer).length > inkLines(plainCustomer).length,
+    "the discount lines never printed on the customer copy",
+  );
+  const noLogo = await rasterOf(discounted, "customer");
+  assert(
+    noLogo.getSize().height < customer.getSize().height,
+    "the logo never printed on the customer copy",
+  );
+  console.log(
+    `PASS customer receipt: ${customer.getSize().height} dots with logo, discount, total and footer`,
+  );
+
+  // 4. Long orders. These cross the capture-slice boundary repeatedly, which is
+  //    where a ticket used to lose its tail without saying so.
+  let previousHeight = 0;
+  for (const count of [1, 12, 60, 150]) {
+    const payload = longOrder(count);
+    const kitchen = await rasterOf(payload, "kitchen");
+    const receipt = await rasterOf(payload, "customer", { logoDataUrl: logo });
+    fs.writeFileSync(path.join(output, `kitchen-${count}.png`), kitchen.toPNG());
+    for (const image of [kitchen, receipt]) {
+      const last = inkLines(image).at(-1);
+      assert(
+        last.bottom > image.getSize().height - 200,
+        `bottom of a ${count}-line ticket is missing: ${output}`,
+      );
+      assert(
+        last.bottom - last.top >= 3,
+        `end bar missing from a ${count}-line ticket: ${output}`,
+      );
     }
-    const receiptRows = `
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>1 x SOUTHERN FRIED CHICKEN WRAP</span><span>£7.99</span></div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>1 x RASPBERRY LEMONADE</span><span>£3.99</span></div>`;
-    await source.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<html><body><div id="receipt-print-root" style="position:fixed;left:-10000px;width:72mm"><div class="receipt-paper" style="width:72mm;padding:3mm 4mm 4mm;box-sizing:border-box;font:11px/1.375 monospace"><div style="width:48mm;height:16.5mm;overflow:hidden;margin:0 auto 4px"><img src="data:image/png;base64,${logo}" style="display:block;width:48mm;height:48mm;transform:translateY(-16mm)"></div><div style="text-align:center">Rushden Lakes, NN10 6FH</div><div style="text-align:center">Phone: 01933 000000</div><div style="text-align:center">VAT Number: 000000000</div><div style="margin-top:8px;text-align:center">Invoice No: #01</div><div style="text-align:center">takeaway</div><hr><div>date: 2026-09-17 12:30:00</div><div>customer: Walk In Customer</div><div>address: NN10 6FH</div><hr>${receiptRows}<hr><div style="display:flex;justify-content:space-between"><span>Sub Total:</span><span>£11.98</span></div><div style="display:flex;justify-content:space-between"><span>Discount (10%):</span><span>-£1.20</span></div><div data-receipt-total style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>TOTAL:</span><span>£10.78</span></div><div style="display:flex;justify-content:space-between"><span>Total Item(s):</span><span>2</span></div><div style="display:flex;justify-content:space-between"><span>Payment Mode</span><span>Card</span></div><hr><div data-receipt-footer style="text-align:center;font-weight:600">Thank you for visiting us!</div><hr><div style="text-align:center">Served by: Staff</div></div><div class="kitchen-ticket"><strong>2 items for kitchen</strong></div></div></body></html>`));
-    const customerMarkup = await captureReceipt(source.webContents);
-    assert.match(customerMarkup, /Invoice No: #01/);
-    assert.match(customerMarkup, /Discount \(10%\):/);
-    assert.match(customerMarkup, /TOTAL:/);
-    assert.match(customerMarkup, /£10.78/);
-    assert.doesNotMatch(customerMarkup, /Delivery Fee/);
-    assert.match(customerMarkup, /Thank you for visiting us!/);
-    const kitchenMarkup = await captureReceipt(source.webContents, '.kitchen-ticket');
-    assert.match(kitchenMarkup, /2 items for kitchen/);
-    assert.doesNotMatch(kitchenMarkup, /TOTAL:/);
-    const customerRaw = await receiptRaster(customerMarkup);
-    const customerImage = decodeRaster(customerRaw);
-    fs.writeFileSync(path.join(output, 'receipt-customer.png'), customerImage.toPNG());
-    assert(Math.max(...inkRows(customerImage)) > customerImage.getSize().height - 200,
-      `customer receipt footer missing: ${output}`);
-    const preparedCustomer = await prepareReceiptWindow(customerMarkup);
+    assert(kitchen.getSize().height > previousHeight);
+    previousHeight = kitchen.getSize().height;
+
+    const document = buildReceiptDocument(payload, "customer", { logoDataUrl: logo });
+    const { win, pageSize } = await prepareReceiptWindow(document);
     try {
-      const customerPdf = await preparedCustomer.win.webContents.printToPDF({
+      assert.equal(pageSize.width, 80000);
+      const pdf = await win.webContents.printToPDF({
         preferCSSPageSize: true,
         printBackground: true,
-        pageSize: {
-          width: preparedCustomer.pageSize.width / 25400,
-          height: preparedCustomer.pageSize.height / 25400,
-        },
+        pageSize: { width: pageSize.width / 25400, height: pageSize.height / 25400 },
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
       });
-      fs.writeFileSync(path.join(output, 'receipt-customer.pdf'), customerPdf);
-      assert.equal((customerPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length, 1);
-    } finally { preparedCustomer.win.destroy(); }
-    console.log(`PASS customer receipt: ${customerImage.getSize().height} dots with total and footer`);
-    const missing = await printReceipt('<p>Test</p>', 'TRYO-NONEXISTENT-PRINTER');
-    assert.equal(missing.ok, false);
-    assert.match(missing.error, /not available/);
-    const blank = new BrowserWindow({ show: false });
-    try {
-      await blank.loadURL('about:blank');
-      await assert.rejects(captureReceipt(blank.webContents), /No receipt/);
-    } finally { blank.destroy(); }
-    console.log(`PASS missing printer and absent receipt errors. PDFs: ${output}`);
-    const black = Buffer.from([0,0,0,255]);
-    const encoded = encodeReceipt(black, 1, 1);
-    assert.equal(encoded[12], 0x80);
-    assert.deepEqual([...encoded.subarray(-7)], [27,100,6,29,86,66,0]);
-    if (process.platform === 'win32') {
-      const result = await sendRawReceipt('TRYO-NONEXISTENT-PRINTER', encoded);
-      assert.equal(result.ok, false);
-      assert.match(result.error, /printer name is invalid/i);
-      console.log('PASS Windows RAW bridge compiled and returned real spooler error.');
+      // Chromium's PDF page objects are uncompressed. A long order must stay one page.
+      assert.equal(
+        (pdf.toString("latin1").match(/\/Type\s*\/Page\b/g) || []).length,
+        1,
+        `a ${count}-line receipt paginated instead of feeding as one slip`,
+      );
+      fs.writeFileSync(path.join(output, `receipt-${count}.pdf`), pdf);
+    } finally {
+      win.destroy();
     }
-  } finally { source.destroy(); }
+    console.log(
+      `PASS ${count} lines: kitchen ${kitchen.getSize().height} dots, receipt ${receipt.getSize().height} dots, one 80mm x ${pageSize.height / 1000}mm page`,
+    );
+  }
+
+  // 5. Notes, add-ons and options belong to the line they were typed against.
+  const garnished = payloadWith({
+    lines: [
+      {
+        name: "Loaded Fries",
+        quantity: 2,
+        baseLineTotalPence: 1198,
+        isMeal: false,
+        mealLabel: null,
+        mealLineTotalPence: 0,
+        seasoning: "Peri Peri",
+        sauce: "Garlic Mayo",
+        addonLines: [
+          { name: "Extra Cheese", lineTotalPence: 250 },
+          { name: "Jalapenos", lineTotalPence: 150 },
+        ],
+        note: "Allergy: no dairy",
+      },
+      {
+        name: "Plain Fries",
+        quantity: 1,
+        baseLineTotalPence: 299,
+        isMeal: false,
+        mealLabel: null,
+        mealLineTotalPence: 0,
+        seasoning: "None",
+        sauce: null,
+      },
+    ],
+    totalItemCount: 3,
+  });
+  const garnishedTicket = await rasterOf(garnished, "kitchen");
+  fs.writeFileSync(path.join(output, "kitchen-options.png"), garnishedTicket.toPNG());
+  const bare = await rasterOf(
+    payloadWith({
+      lines: garnished.lines.map((line) => ({
+        ...line,
+        seasoning: null,
+        sauce: null,
+        addonLines: undefined,
+        note: undefined,
+      })),
+      totalItemCount: 3,
+    }),
+    "kitchen",
+  );
+  assert(
+    inkLines(garnishedTicket).length >= inkLines(bare).length + 5,
+    "seasoning, sauce, add-ons or the note never printed",
+  );
+  // "None" is not a choice the kitchen needs to read.
+  const chosenNone = await rasterOf(
+    payloadWith({
+      lines: [{ ...garnished.lines[1], seasoning: "None" }],
+      totalItemCount: 1,
+    }),
+    "kitchen",
+  );
+  const chosenNull = await rasterOf(
+    payloadWith({
+      lines: [{ ...garnished.lines[1], seasoning: null }],
+      totalItemCount: 1,
+    }),
+    "kitchen",
+  );
+  assert.equal(
+    chosenNone.getSize().height,
+    chosenNull.getSize().height,
+    '"None" printed as if it were a real choice',
+  );
+  console.log("PASS options, add-ons and notes print against their own line");
+
+  // 6. Text the kitchen types must not be able to change the ticket's markup.
+  const injected = await rasterOf(
+    payloadWith({
+      lines: [
+        {
+          name: '<script>x</script>"&\'<div style="display:none">',
+          quantity: 1,
+          baseLineTotalPence: 100,
+          isMeal: false,
+          mealLabel: null,
+          mealLineTotalPence: 0,
+          note: "</div></body>",
+        },
+      ],
+      totalItemCount: 1,
+    }),
+    "kitchen",
+  );
+  const lastInjected = inkLines(injected).at(-1);
+  assert(
+    lastInjected.bottom - lastInjected.top >= 3,
+    "markup in an item name broke the ticket",
+  );
+  console.log("PASS item names and notes are escaped, not executed");
+
+  // 7. A ticket with no end bar is refused rather than half-printed.
+  await assert.rejects(
+    receiptRaster("<!doctype html><html><body><p>No marker here</p></body></html>"),
+    /end marker/,
+  );
+  await assert.rejects(receiptRaster(""), /No ticket/);
+  await assert.rejects(
+    receiptRaster(
+      '<!doctype html><html><body style="width:576px"><div class="endmark" style="height:4px;background:#000"></div></body></html>',
+    ),
+    /blank/,
+  );
+  console.log("PASS an unprintable ticket errors instead of feeding paper");
+
+  // 8. Printer plumbing.
+  const missing = await printReceipt(
+    buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
+    "TRYO-NONEXISTENT-PRINTER",
+  );
+  assert.equal(missing.ok, false);
+  assert.match(missing.error, /not available/);
+  const noPrinter = await printReceipt(
+    buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
+    "",
+  );
+  assert.equal(noPrinter.ok, false);
+  assert.match(noPrinter.error, /Choose and save/);
+
+  const black = Buffer.from([0, 0, 0, 255]);
+  const encoded = encodeReceipt(black, 1, 1);
+  assert.equal(encoded[12], 0x80);
+  assert.deepEqual([...encoded.subarray(-7)], [27, 100, 6, 29, 86, 66, 0]);
+  const kitchenRaw = await receiptRaster(
+    buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
+  );
+  assert.deepEqual([...kitchenRaw.subarray(-7)], [0x1b, 0x64, 6, 0x1d, 0x56, 0x42, 0]);
+
+  if (process.platform === "win32") {
+    const result = await sendRawReceipt("TRYO-NONEXISTENT-PRINTER", encoded);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /printer name is invalid/i);
+    console.log("PASS Windows RAW bridge compiled and returned real spooler error.");
+  }
+  console.log(`PASS printer errors and ESC/POS trailer. Images and PDFs: ${output}`);
   app.exit(0);
-}).catch(error => { console.error(error); app.exit(1); });
+}).catch((error) => {
+  console.error(error);
+  app.exit(1);
+});

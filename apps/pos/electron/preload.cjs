@@ -10,7 +10,11 @@ contextBridge.exposeInMainWorld("tryoElectron", {
     ipcRenderer.invoke("print:setReceiptPrinter", deviceName),
   testReceiptPrinter: (deviceName) =>
     ipcRenderer.invoke("print:testReceiptPrinter", deviceName),
-  /** Print the current window (uses #receipt-print-root @media print CSS). */
+  /**
+   * Print one order. `kitchenHtml` and `customerHtml` are complete documents
+   * built by lib/receipt-document.ts; pass `customerHtml: null` to skip the
+   * customer copy. The kitchen ticket always prints.
+   */
   printReceiptSilent: (options) =>
     ipcRenderer.invoke("receipt-print-silent", options),
 });

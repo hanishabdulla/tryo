@@ -4,7 +4,7 @@ const http = require("http");
 const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
-const { captureReceipt, printReceipt } = require("./receipt-print.cjs");
+const { disposeRasterSurface, printReceipt } = require("./receipt-print.cjs");
 const { packagedAppDirectory } = require("./runtime-paths.cjs");
 
 const IS_DEV = process.env.ELECTRON_DEV === "1";
@@ -86,12 +86,26 @@ function receiptPrinterName() {
 }
 
 function printTestReceipt(deviceName) {
-  return printReceipt(`<section style="width:72mm;margin:0 auto;padding:6mm 4mm">
-    <h2 style="text-align:center">TRYO POS</h2><p>Receipt printer test</p><hr>
-    <p>80mm paper / full receipt length</p>
-    <p>All of this slip should feed out automatically.</p>
-    <p>Check that this bottom line is visible above the tear bar.</p><hr>
-    <p>END OF TEST RECEIPT</p></section>`, deviceName);
+  // Same shape as a real ticket: 576-dot page, mono type, and the `.endmark`
+  // bar the raster check looks for.
+  return printReceipt(
+    `<!doctype html><html><head><meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+    <style>*{box-sizing:border-box;margin:0;padding:0}html{background:#fff;overflow:hidden}
+    body{width:576px;padding:64px 32px;background:#fff;color:#000;font:27px/1.4 "Consolas","Menlo","DejaVu Sans Mono","Courier New",monospace}
+    .rule{border-top:4px solid #000;margin:17px 0}.mid{text-align:center}
+    .endmark{height:4px;background:#000;margin-top:24px}@page{margin:0}</style></head><body>
+    <div class="mid" style="font-size:40px;font-weight:700">TRYO POS</div>
+    <div class="mid">Receipt printer test</div>
+    <div class="rule"></div>
+    <div>80mm paper, 72mm of ink, 576 dots per line.</div>
+    <div>All of this slip should feed out automatically.</div>
+    <div>Check that the solid bar below is visible above the tear bar.</div>
+    <div class="rule"></div>
+    <div>END OF TEST RECEIPT</div>
+    <div class="endmark"></div></body></html>`,
+    deviceName,
+  );
 }
 
 function getAvailablePort(preferredPort) {
@@ -225,18 +239,27 @@ function setupPrintIpc() {
     if (!isTrustedSender(event.senderFrame)) {
       return { ok: false, error: "Untrusted print request" };
     }
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return { ok: false, error: "No window" };
     const printer = receiptPrinterName();
     if (!printer) return { ok: false, error: "Missing printer name" };
-    try {
-      const customerCopy = options?.customerCopy !== false;
-      // The kitchen ticket always prints so preparation starts immediately.
-      const kitchen = await captureReceipt(event.sender, ".kitchen-ticket");
-      const kitchenResult = await printReceipt(kitchen, printer);
-      if (!customerCopy) return kitchenResult;
 
-      const customer = await captureReceipt(event.sender, ".receipt-paper");
+    const ticket = (value, label) => {
+      if (typeof value !== "string" || !value.trim()) {
+        throw new Error(`The ${label} was not ready to print.`);
+      }
+      if (value.length > 2_000_000) {
+        throw new Error(`The ${label} is too large to print.`);
+      }
+      return value;
+    };
+
+    try {
+      // The kitchen ticket always prints, so preparation starts immediately.
+      const kitchen = ticket(options?.kitchenHtml, "kitchen ticket");
+      const kitchenResult = await printReceipt(kitchen, printer);
+      if (options?.customerHtml === undefined || options?.customerHtml === null) {
+        return kitchenResult;
+      }
+      const customer = ticket(options.customerHtml, "customer receipt");
       const customerResult = await printReceipt(customer, printer);
       const errors = [
         kitchenResult.ok ? "" : `Kitchen ticket: ${kitchenResult.error}`,
@@ -429,3 +452,4 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 app.on("before-quit", stopNextServer);
+app.on("before-quit", disposeRasterSurface);

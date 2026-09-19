@@ -12,10 +12,14 @@ import {
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 import { todayBusinessDate, type TillDaySummary } from "@/lib/till";
 import {
-  ReceiptStage,
   type ReceiptLinePrint,
   type ReceiptPayload,
-} from "./ReceiptStage";
+} from "@/lib/receipt-document";
+import {
+  buildReceiptDocuments,
+  printDocumentsInBrowser,
+  receiptLogoDataUrl,
+} from "@/lib/receipt-printing";
 import { CollectionQueue } from "./CollectionQueue";
 import { TillManager } from "./TillManager";
 
@@ -228,48 +232,65 @@ export default function PosApp() {
     void electron.getReceiptPrinter().then(setConfiguredPrinter).catch(() => {});
   }, []);
 
-  const printCurrentReceipt = useCallback(async (customerCopy = true) => {
-    if (receiptInFlight.current) return false;
-    receiptInFlight.current = true;
-    setReceiptBusy(true);
-    try {
-    const electron = window.tryoElectron;
-    if (!electron) {
-      window.print();
-      return true;
-    }
-    const device = await electron.getReceiptPrinter();
-    setConfiguredPrinter(device);
-    if (!device) {
-      setPrinterOpen(true);
-      await refreshPrinters();
-      setPrinterMessage("Choose and test a receipt printer before taking orders.");
-      return false;
-    }
-    const result = await electron.printReceiptSilent({ customerCopy });
-    if (!result.ok) {
-      setPrinterMessage(result.error || "Receipt printing failed.");
-      setPrinterOpen(true);
-      return false;
-    }
-    return true;
-    } catch (error) {
-      setPrinterMessage(`Order saved; receipt was not printed. ${error instanceof Error ? error.message : "Check the printer connection."} Use Reprint last after fixing it.`);
-      setPrinterOpen(true);
-      return false;
-    } finally {
-      receiptInFlight.current = false;
-      setReceiptBusy(false);
-    }
-  }, [refreshPrinters]);
+  const printCurrentReceipt = useCallback(
+    async (data: ReceiptPayload | null) => {
+      if (!data) return false;
+      if (receiptInFlight.current) return false;
+      receiptInFlight.current = true;
+      setReceiptBusy(true);
+      try {
+        // Both tickets are built from the order itself, so what the printer
+        // renders is what the kitchen and the customer were charged for.
+        const documents = await buildReceiptDocuments(data);
+        const electron = window.tryoElectron;
+        if (!electron) {
+          await printDocumentsInBrowser(documents);
+          return true;
+        }
+        const device = await electron.getReceiptPrinter();
+        setConfiguredPrinter(device);
+        if (!device) {
+          setPrinterOpen(true);
+          await refreshPrinters();
+          setPrinterMessage(
+            "Choose and test a receipt printer before taking orders.",
+          );
+          return false;
+        }
+        const result = await electron.printReceiptSilent(documents);
+        if (!result.ok) {
+          setPrinterMessage(result.error || "Receipt printing failed.");
+          setPrinterOpen(true);
+          return false;
+        }
+        return true;
+      } catch (error) {
+        setPrinterMessage(
+          `Order saved; receipt was not printed. ${error instanceof Error ? error.message : "Check the printer connection."} Use Reprint last after fixing it.`,
+        );
+        setPrinterOpen(true);
+        return false;
+      } finally {
+        receiptInFlight.current = false;
+        setReceiptBusy(false);
+      }
+    },
+    [refreshPrinters],
+  );
 
   useEffect(() => {
     if (!receipt) return;
     const receiptKey = `${receipt.createdAt}:${receipt.orderNumber}`;
     if (printedOrderRef.current === receiptKey) return;
     printedOrderRef.current = receiptKey;
-    void printCurrentReceipt(receipt.printCustomerReceipt);
+    void printCurrentReceipt(receipt);
   }, [printCurrentReceipt, receipt]);
+
+  // Fetch the logo once, up front, so the first order of the day is not the
+  // one that waits for it.
+  useEffect(() => {
+    void receiptLogoDataUrl();
+  }, []);
 
   const cartSubtotalPence = useMemo(
     () =>
@@ -646,7 +667,7 @@ export default function PosApp() {
             type="button"
             disabled={!receipt || receiptBusy}
             onClick={() =>
-              void printCurrentReceipt(receipt?.printCustomerReceipt ?? true)
+              void printCurrentReceipt(receipt)
             }
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-xs font-semibold text-zinc-300 transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -1516,7 +1537,6 @@ export default function PosApp() {
         onClose={() => setTillManagerOpen(false)}
       />
 
-      <ReceiptStage data={receipt} />
     </div>
   );
 }

@@ -75,14 +75,37 @@ updates, and is not stored in the repository. Each completed order prints
 silently to that device. **Reprint last** can resend the latest receipt after a
 paper or spooler problem.
 
+## How a ticket is printed
+
+Both tickets are built from the order itself by `lib/receipt-document.ts`, which
+returns one complete, self-contained HTML document per ticket: no Tailwind, no
+web fonts, nothing read back out of the till's own DOM. Lengths are printer
+dots, so `1px` is one dot of an 80mm head and the 576-dot line needs no scaling.
+
+On Windows the document is rendered offscreen at 576 dots and sent to the
+spooler as ESC/POS raster, because POS queues commonly use the Generic / Text
+Only driver, which cannot print a Chromium page. Everywhere else it goes through
+Chromium's own print path as a single 80mm page.
+
+Before any bytes reach the printer, the page reports every band of rows that
+must come out black and the raster is checked against that list. A dropped line,
+a blank capture or a mismeasured page raises an error instead of feeding a
+ticket that is missing items. Every ticket also ends in a solid bar; if the bar
+is not in the raster, nothing is printed.
+
+`npm run test:receipt` rasterises real orders in Electron, decodes the ESC/POS
+bytes back into an image, and reads the image — including a 150-line order and
+the order that once printed short.
+
 Tagged commits (`v*`) trigger `.github/workflows/release.yml`, which builds the
 Windows NSIS installer on GitHub Actions and attaches it to a GitHub release.
 
 ## Application structure
 
 - `app/` — POS, protected reporting dashboard, auth API, and print view.
-- `components/pos/` — ordering flow, checkout, and receipt UI.
+- `components/pos/` — ordering flow and checkout UI.
 - `convex/` — menu, order, report, and seed backend functions/schema.
 - `electron/` — desktop lifecycle, local Next server, secure preload bridge,
   single-instance handling, and native printer integration.
-- `lib/` — pricing, discount, reporting date, and Excel export helpers.
+- `lib/` — ticket documents, pricing, discount, reporting date, and export
+  helpers.

@@ -77,27 +77,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* Thermal receipt: off-screen on screen, full width when printing */
-.receipt-stage {
-  position: fixed;
-  left: -10000px;
-  top: 0;
-  width: 72mm;
-  pointer-events: none;
-}
-
-.receipt-paper {
-  width: 72mm;
-  padding: 3mm 4mm 4mm;
-  background: white;
-}
-
-.kitchen-ticket {
-  width: 72mm;
-  padding: 8mm 4mm;
-  background: white;
-}
-
 @media print {
   @page {
     size: 80mm auto;
@@ -113,23 +92,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
   body * {
     visibility: hidden !important;
-  }
-
-  #receipt-print-root,
-  #receipt-print-root * {
-    visibility: visible !important;
-  }
-
-  #receipt-print-root {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 72mm !important;
-    pointer-events: auto !important;
-  }
-
-  #receipt-print-root[data-customer-copy="false"] .receipt-paper {
-    display: none !important;
   }
 
   #menu-print-root,
