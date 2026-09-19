@@ -12,8 +12,8 @@ contextBridge.exposeInMainWorld("tryoElectron", {
     ipcRenderer.invoke("print:testReceiptPrinter", deviceName),
   /**
    * Print one order. `kitchenHtml` and `customerHtml` are complete documents
-   * built by lib/receipt-document.ts; pass `customerHtml: null` to skip the
-   * customer copy. The kitchen ticket always prints.
+   * built by lib/receipt-document.ts. Pass either document as `null` to skip
+   * it; at least one document must be supplied.
    */
   printReceiptSilent: (options) =>
     ipcRenderer.invoke("receipt-print-silent", options),

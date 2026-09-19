@@ -58,29 +58,23 @@ jobs:
           $notes = @'
           ## Tryo POS for Windows
 
-          ### Kitchen tickets and receipts print in full
-          - Fixes tickets that fed out missing their last items, with no error shown. Order #6 on 19 September printed six of its seven lines and lost the item count.
-          - The cause was the size of the till screen. The ticket was rendered into a window taller than the display, Windows capped the window at the screen, and the part that fitted was then stretched to fill the rest. Text printed about 1.4 times too tall and everything past the fold was never rendered. Tickets are now rendered a screenful at a time, at the size the screen really is.
-          - Both tickets are now built from the order itself rather than copied out of the till screen. The layout that is measured is the layout that prints, so a font difference between screen and printer can no longer shorten a ticket.
-          - Every ticket is checked against the order before any bytes reach the printer. A missing line, a blank render or a bad measurement now raises an error on the till instead of feeding an incomplete ticket.
-          - Every ticket ends with a solid bar. If the bar is missing the job is refused, so staff can tell at a glance that a slip is complete.
-          - Fixes a fault where the second ticket of an order could fail to render at all.
-          - Tickets are laid out at the printer resolution of 576 dots per line, so text is sharper and nothing is rescaled.
-          - Chosen options reading "None" no longer print on the kitchen ticket.
+          ### Checkout on smaller till screens
+          - The payment window now fits the available screen height and scrolls when necessary.
+          - Cancel and Submit Order stay visible at the bottom, so staff can always complete an order on a 1024x768 POS display.
 
-          ### Order details in the dashboard
-          - Click any order in Daily summary or Sales by date range to open it.
-          - Shows every line with quantity, unit price, meal, seasoning, sauce, add-ons and kitchen notes.
-          - Shows subtotal, the discount with the percentage or amount that produced it, delivery fee and total paid.
-          - Shows payment method, with cash given and change, plus status and customer details on website orders.
+          ### No-bill orders
+          - Adds a **No bill** choice alongside **Kitchen + customer** and **Kitchen only**.
+          - No-bill orders are saved and paid normally without printing a kitchen ticket or customer receipt.
+
+          ### Reprint customer bills
+          - Adds **Reprint bill** to the top-right of every order detail window in the dashboard.
+          - Reprints only the customer receipt through the receipt printer configured on the POS machine.
+          - Historical totals remain exact, with stored meal, option, add-on and note details included.
 
           ### Setup
           1. Download and run the `.exe` installer.
-          2. Connect an 80mm ESC/POS-compatible thermal printer and confirm its queue appears in Windows Settings > Printers & scanners. Generic / Text Only is supported.
-          3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
-          4. Save the printer. Completed orders then print silently and **Reprint last** remains available.
-
-          Use a display of at least 1024x768 at 100% scaling. The app now reports an error rather than printing a distorted ticket if the screen cannot render a full-width slip.
+          2. Replace the existing Tryo POS installation when prompted.
+          3. The saved receipt-printer selection is retained across the update.
 
           This build uses the production Convex deployment and requires an internet connection.
           '@

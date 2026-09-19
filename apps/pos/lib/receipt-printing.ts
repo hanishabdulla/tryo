@@ -40,7 +40,7 @@ export function receiptLogoDataUrl(): Promise<string | null> {
 }
 
 export type ReceiptDocuments = {
-  kitchenHtml: string;
+  kitchenHtml: string | null;
   customerHtml: string | null;
 };
 
@@ -54,6 +54,14 @@ export async function buildReceiptDocuments(
       ? buildReceiptDocument(data, "customer", { logoDataUrl })
       : null,
   };
+}
+
+/** Build only the customer copy, used when reprinting an order from reporting. */
+export async function buildCustomerReceiptDocument(
+  data: ReceiptPayload,
+): Promise<string> {
+  const logoDataUrl = await receiptLogoDataUrl();
+  return buildReceiptDocument(data, "customer", { logoDataUrl });
 }
 
 /**

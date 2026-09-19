@@ -253,18 +253,28 @@ function setupPrintIpc() {
     };
 
     try {
-      // The kitchen ticket always prints, so preparation starts immediately.
-      const kitchen = ticket(options?.kitchenHtml, "kitchen ticket");
-      const kitchenResult = await printReceipt(kitchen, printer);
-      if (options?.customerHtml === undefined || options?.customerHtml === null) {
-        return kitchenResult;
+      const jobs = [];
+      if (options?.kitchenHtml !== undefined && options?.kitchenHtml !== null) {
+        jobs.push({
+          label: "Kitchen ticket",
+          html: ticket(options.kitchenHtml, "kitchen ticket"),
+        });
       }
-      const customer = ticket(options.customerHtml, "customer receipt");
-      const customerResult = await printReceipt(customer, printer);
-      const errors = [
-        kitchenResult.ok ? "" : `Kitchen ticket: ${kitchenResult.error}`,
-        customerResult.ok ? "" : `Customer receipt: ${customerResult.error}`,
-      ].filter(Boolean);
+      if (options?.customerHtml !== undefined && options?.customerHtml !== null) {
+        jobs.push({
+          label: "Customer receipt",
+          html: ticket(options.customerHtml, "customer receipt"),
+        });
+      }
+      if (jobs.length === 0) {
+        throw new Error("No receipt document was supplied.");
+      }
+
+      const errors = [];
+      for (const job of jobs) {
+        const result = await printReceipt(job.html, printer);
+        if (!result.ok) errors.push(`${job.label}: ${result.error}`);
+      }
       return errors.length ? { ok: false, error: errors.join(" ") } : { ok: true };
     } catch (error) {
       return {

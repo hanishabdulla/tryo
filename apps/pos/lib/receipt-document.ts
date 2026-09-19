@@ -36,6 +36,8 @@ export type ReceiptLinePrint = {
   sauce?: string | null;
   /** Loaded Fries — each row shows the add-on and its line total */
   addonLines?: ReceiptAddonLine[];
+  /** Option text retained for historical reprints when old per-option prices are unavailable. */
+  details?: string[];
   /** Custom instructions typed on the till. */
   note?: string;
 };
@@ -218,6 +220,9 @@ function customerBody(data: ReceiptPayload, logoDataUrl?: string | null): string
         parts.push(
           `<div class="row sub"><span class="l up">${esc(`${line.quantity} x ${addon.name}`)}:</span><span class="r">${money(addon.lineTotalPence)}</span></div>`,
         );
+      }
+      for (const detail of line.details ?? []) {
+        parts.push(`<div class="sub">${esc(detail)}</div>`);
       }
       if (line.note) parts.push(`<div class="sub">Note: ${esc(line.note)}</div>`);
       return `<div class="c-line">${parts.join("")}</div>`;

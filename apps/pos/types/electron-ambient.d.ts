@@ -18,7 +18,7 @@ declare global {
       setReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
       testReceiptPrinter: (deviceName: string) => Promise<ReceiptPrintResult>;
       printReceiptSilent: (options: {
-        kitchenHtml: string;
+        kitchenHtml: string | null;
         customerHtml: string | null;
       }) => Promise<ReceiptPrintResult>;
     };

@@ -71,9 +71,10 @@ environment variables take precedence over either file.
 5. After the test slip prints correctly, choose **Save printer**.
 
 The selection is stored in Electron's per-user application data, survives app
-updates, and is not stored in the repository. Each completed order prints
-silently to that device. **Reprint last** can resend the latest receipt after a
-paper or spooler problem.
+updates, and is not stored in the repository. Completed orders print silently
+to that device unless **No bill** is selected at payment. **Reprint last** can
+resend the latest printed order after a paper or spooler problem, and the
+dashboard can reprint a historical customer bill.
 
 ## How a ticket is printed
 

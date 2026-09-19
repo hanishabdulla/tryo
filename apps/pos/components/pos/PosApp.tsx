@@ -55,6 +55,8 @@ type CartLine = {
   note: string;
 };
 
+type ReceiptMode = "both" | "kitchen" | "none";
+
 /** Same item, meal choice, options and instructions stack into one line. */
 function lineKey(
   itemName: string,
@@ -181,7 +183,7 @@ export default function PosApp() {
     "percentage",
   );
   const [discountRaw, setDiscountRaw] = useState("");
-  const [printCustomerReceipt, setPrintCustomerReceipt] = useState(true);
+  const [receiptMode, setReceiptMode] = useState<ReceiptMode>("both");
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
   const [orderBusy, setOrderBusy] = useState(false);
@@ -532,7 +534,7 @@ export default function PosApp() {
       note: l.note || undefined,
     }));
 
-    setReceipt({
+    const nextReceipt: ReceiptPayload = {
       orderNumber: res.orderNumber,
       createdAt: res.createdAt,
       lines,
@@ -547,11 +549,15 @@ export default function PosApp() {
       totalPence: res.total,
       totalItemCount,
       paymentMethod: payMethod,
-      printCustomerReceipt,
+      printCustomerReceipt: receiptMode === "both",
       businessAddress,
       businessPhone,
       businessVat,
-    });
+    };
+
+    // A no-bill order is still saved and paid in exactly the same way, but it
+    // must not enter the automatic (or "Reprint last") printing path.
+    setReceipt(receiptMode === "none" ? null : nextReceipt);
 
     setCart([]);
     setPayOpen(false);
@@ -559,7 +565,7 @@ export default function PosApp() {
     setPayMethod("card");
     setDiscountKind("percentage");
     setDiscountRaw("");
-    setPrintCustomerReceipt(true);
+    setReceiptMode("both");
   }, [
     amountDuePence,
     businessAddress,
@@ -571,7 +577,7 @@ export default function PosApp() {
     discountRaw,
     givenPence,
     payMethod,
-    printCustomerReceipt,
+    receiptMode,
     submitOrder,
     tillTakingOrders,
     totalItemCount,
@@ -1178,13 +1184,13 @@ export default function PosApp() {
 
       {payOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pay-title"
         >
-          <div className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
-            <div className="flex items-start justify-between gap-3">
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#131316] shadow-2xl shadow-black/60">
+            <div className="flex shrink-0 items-start justify-between gap-3 px-6 pt-6">
               <div>
                 <h2 id="pay-title" className="text-xl font-bold text-white">
                   Payment
@@ -1201,6 +1207,7 @@ export default function PosApp() {
               </button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
             <div className="mt-4 space-y-1 text-sm text-zinc-400">
               <div className="flex justify-between gap-3">
                 <span>Subtotal</span>
@@ -1315,15 +1322,15 @@ export default function PosApp() {
                 Receipt
               </p>
               <p className="mt-1 text-sm text-zinc-400">
-                The kitchen ticket always prints.
+                Choose what prints for this order.
               </p>
-              <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="mt-2 grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setPrintCustomerReceipt(true)}
+                  onClick={() => setReceiptMode("both")}
                   className={[
-                    "min-h-14 rounded-2xl border px-3 text-sm font-bold",
-                    printCustomerReceipt
+                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
+                    receiptMode === "both"
                       ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
                       : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                   ].join(" ")}
@@ -1332,15 +1339,27 @@ export default function PosApp() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPrintCustomerReceipt(false)}
+                  onClick={() => setReceiptMode("kitchen")}
                   className={[
-                    "min-h-14 rounded-2xl border px-3 text-sm font-bold",
-                    !printCustomerReceipt
+                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
+                    receiptMode === "kitchen"
                       ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
                       : "border-white/[0.07] bg-zinc-950 text-zinc-300",
                   ].join(" ")}
                 >
                   Kitchen only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptMode("none")}
+                  className={[
+                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
+                    receiptMode === "none"
+                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                  ].join(" ")}
+                >
+                  No bill
                 </button>
               </div>
             </div>
@@ -1384,7 +1403,8 @@ export default function PosApp() {
             )}
 
             {orderError ? <p role="alert" className="mt-4 text-sm text-red-300">{orderError}</p> : null}
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            </div>
+            <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-white/[0.07] bg-[#131316] px-6 py-4">
               <button
                 type="button"
                 disabled={orderBusy}

@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/convex-api";
 import type { OrderRow } from "@/lib/finances-excel";
 import { formatPence } from "@/lib/money";
+import type { ReceiptPayload } from "@/lib/receipt-document";
+import {
+  buildCustomerReceiptDocument,
+  printDocumentsInBrowser,
+} from "@/lib/receipt-printing";
 import { formatTsLocal } from "@/lib/report-dates";
 
 type OrderItem = OrderRow["items"][number];
@@ -34,6 +41,60 @@ function itemOptions(item: OrderItem): string[] {
   if (item.hotDogCheese) options.push("Cheese");
   for (const addon of item.addons ?? []) options.push(`+ ${addon}`);
   return options;
+}
+
+function receiptDiscountLabel(order: OrderRow): string | null {
+  const amount = order.discountAmountPence ?? 0;
+  if (amount <= 0) return null;
+  if (order.discountMode === "percentage") {
+    return `Discount (${order.discountInput ?? 0}%):`;
+  }
+  if (order.discountMode === "fixed") {
+    return `Discount (${formatPence(order.discountInput ?? 0)}):`;
+  }
+  return "Discount:";
+}
+
+function customerReceiptPayload(
+  order: OrderRow,
+  config: Record<string, unknown> | undefined,
+): ReceiptPayload {
+  return {
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    // Historical orders retain their final line totals, but not the old price
+    // split for each option. Keep the total exact and print choices as details.
+    lines: order.items.map((item) => ({
+      name: item.itemName,
+      quantity: item.quantity,
+      baseLineTotalPence: item.lineTotal,
+      isMeal: false,
+      mealLabel: null,
+      mealLineTotalPence: 0,
+      details: itemOptions(item),
+      note: item.note,
+    })),
+    subtotalPence: order.subtotal,
+    discountLabel: receiptDiscountLabel(order),
+    discountAmountPence: order.discountAmountPence ?? 0,
+    deliveryFeePence: order.deliveryFee,
+    totalPence: order.total,
+    totalItemCount: order.totalItemCount,
+    paymentMethod: order.paymentMethod === "cash" ? "cash" : "card",
+    printCustomerReceipt: true,
+    businessAddress:
+      typeof config?.businessAddress === "string"
+        ? config.businessAddress
+        : "Rushden Lakes, FC3, Rushden, Northamptonshire",
+    businessPhone:
+      typeof config?.businessPhone === "string"
+        ? config.businessPhone
+        : "+44 7825583940",
+    businessVat:
+      typeof config?.businessVat === "string"
+        ? config.businessVat
+        : "491891448",
+  };
 }
 
 function Row({
@@ -80,6 +141,14 @@ export function OrderDetailModal({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const config = useQuery(api.menu.getMenuConfig, {}) as
+    | Record<string, unknown>
+    | undefined;
+  const [printBusy, setPrintBusy] = useState(false);
+  const [printResult, setPrintResult] = useState<{
+    orderId: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!order) return;
@@ -96,6 +165,47 @@ export function OrderDetailModal({
   const discount = discountDescription(order);
   const itemsTotal = order.items.reduce((sum, item) => sum + item.lineTotal, 0);
   const isWeb = order.source === "web";
+
+  const reprintCustomerBill = async () => {
+    if (printBusy) return;
+    setPrintBusy(true);
+    setPrintResult(null);
+    try {
+      const customerHtml = await buildCustomerReceiptDocument(
+        customerReceiptPayload(order, config),
+      );
+      const electron = window.tryoElectron;
+      if (!electron) {
+        await printDocumentsInBrowser({ kitchenHtml: null, customerHtml });
+      } else {
+        const printer = await electron.getReceiptPrinter();
+        if (!printer) {
+          throw new Error("No receipt printer is configured. Set one up from the till first.");
+        }
+        const result = await electron.printReceiptSilent({
+          kitchenHtml: null,
+          customerHtml,
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "The printer rejected the bill.");
+        }
+      }
+      setPrintResult({
+        orderId: order._id,
+        message: "Customer bill sent to the printer.",
+      });
+    } catch (error) {
+      setPrintResult({
+        orderId: order._id,
+        message:
+          error instanceof Error
+            ? error.message
+            : "The customer bill could not be printed.",
+      });
+    } finally {
+      setPrintBusy(false);
+    }
+  };
 
   return (
     <div
@@ -121,15 +231,34 @@ export function OrderDetailModal({
               {isWeb ? " · online" : " · till"}
             </p>
           </div>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            className="rounded-xl px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          >
-            Close
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={printBusy}
+              onClick={() => void reprintCustomerBill()}
+              className="min-h-10 rounded-xl border border-[#00955e]/50 bg-[#00955e]/15 px-4 text-sm font-semibold text-[#55d9a5] transition-colors hover:bg-[#00955e]/25 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            >
+              {printBusy ? "Printing…" : "Reprint bill"}
+            </button>
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={onClose}
+              className="min-h-10 rounded-xl px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
         </header>
+
+        {printResult?.orderId === order._id ? (
+          <p
+            className="border-b border-white/[0.06] bg-white/[0.025] px-6 py-3 text-sm text-zinc-300"
+            role="status"
+          >
+            {printResult.message}
+          </p>
+        ) : null}
 
         <div className="space-y-6 px-6 py-5">
           {isWeb && (order.customerName || order.customerPhone) ? (
