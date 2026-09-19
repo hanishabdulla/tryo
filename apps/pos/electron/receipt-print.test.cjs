@@ -82,8 +82,11 @@ function inkLines(image) {
  * removed — and the two rasters are compared. Any line that fails to change the
  * image was never printed.
  */
-async function rasterOf(payload, kind, options) {
-  const raw = await receiptRaster(buildReceiptDocument(payload, kind, options));
+async function rasterOf(payload, kind, options, rasterOptions) {
+  const raw = await receiptRaster(
+    buildReceiptDocument(payload, kind, options),
+    rasterOptions,
+  );
   return decodeRaster(raw);
 }
 
@@ -171,7 +174,32 @@ app.whenReady().then(async () => {
     "the end bar is too close to the cut",
   );
 
-  // 3. Customer copy: money, discount and footer all reach the paper.
+  // 3. Tills run on small screens, so the ticket is captured a screenful at a
+  //    time. Every slice height has to give byte-identical paper: a till on a
+  //    1024x768 panel used to stretch its 720-row viewport to fill a 1024-row
+  //    slice, printing a ticket 1.4x too tall that stopped at the fold.
+  const wholeTicket = await receiptRaster(
+    buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
+  );
+  for (const sliceDots of [720, 333, 120, 97]) {
+    const sliced = await receiptRaster(
+      buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
+      { sliceDots },
+    );
+    assert(
+      sliced.equals(wholeTicket),
+      `a ${sliceDots}-dot viewport printed different paper from a full-height one`,
+    );
+  }
+  const tallReceipt = await rasterOf(longOrder(40), "customer", { logoDataUrl: logo }, { sliceDots: 97 });
+  const tallLast = inkLines(tallReceipt).at(-1);
+  assert(
+    tallLast.bottom > tallReceipt.getSize().height - 200 && tallLast.bottom - tallLast.top >= 3,
+    "a long receipt lost its end bar when captured in small slices",
+  );
+  console.log("PASS the ticket is identical at every viewport height");
+
+  // 4. Customer copy: money, discount and footer all reach the paper.
   const discounted = payloadWith({
     discountLabel: "Discount (10%):",
     discountAmountPence: 749,
@@ -197,7 +225,7 @@ app.whenReady().then(async () => {
     `PASS customer receipt: ${customer.getSize().height} dots with logo, discount, total and footer`,
   );
 
-  // 4. Long orders. These cross the capture-slice boundary repeatedly, which is
+  // 5. Long orders. These cross the capture-slice boundary repeatedly, which is
   //    where a ticket used to lose its tail without saying so.
   let previousHeight = 0;
   for (const count of [1, 12, 60, 150]) {
@@ -244,7 +272,7 @@ app.whenReady().then(async () => {
     );
   }
 
-  // 5. Notes, add-ons and options belong to the line they were typed against.
+  // 6. Notes, add-ons and options belong to the line they were typed against.
   const garnished = payloadWith({
     lines: [
       {
@@ -316,7 +344,7 @@ app.whenReady().then(async () => {
   );
   console.log("PASS options, add-ons and notes print against their own line");
 
-  // 6. Text the kitchen types must not be able to change the ticket's markup.
+  // 7. Text the kitchen types must not be able to change the ticket's markup.
   const injected = await rasterOf(
     payloadWith({
       lines: [
@@ -341,7 +369,7 @@ app.whenReady().then(async () => {
   );
   console.log("PASS item names and notes are escaped, not executed");
 
-  // 7. A ticket with no end bar is refused rather than half-printed.
+  // 8. A ticket with no end bar is refused rather than half-printed.
   await assert.rejects(
     receiptRaster("<!doctype html><html><body><p>No marker here</p></body></html>"),
     /end marker/,
@@ -355,7 +383,7 @@ app.whenReady().then(async () => {
   );
   console.log("PASS an unprintable ticket errors instead of feeding paper");
 
-  // 8. Printer plumbing.
+  // 9. Printer plumbing.
   const missing = await printReceipt(
     buildReceiptDocument(ORDER_FROM_THE_SHOP, "kitchen"),
     "TRYO-NONEXISTENT-PRINTER",

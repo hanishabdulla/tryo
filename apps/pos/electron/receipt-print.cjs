@@ -72,6 +72,9 @@ const MEASURE_SCRIPT = `(async () => {
 
   const deepest = bands.length ? bands[bands.length - 1][1] : 0;
   return {
+    // How much of the ticket the window can actually show. The operating
+    // system caps a window at the screen, so this is not what was asked for.
+    view: { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight },
     height: Math.ceil(Math.max(body.getBoundingClientRect().height, body.scrollHeight, deepest, endRect.bottom)),
     endTop: endRect.top,
     endBottom: endRect.bottom,
@@ -246,21 +249,39 @@ function disposeRasterSurface() {
 }
 
 /**
- * Render at printer resolution offscreen and capture in fixed slices. A window
- * cannot be taller than the screen, so a long ticket has to be walked past a
- * shorter viewport rather than captured in one shot.
+ * Render at printer resolution offscreen and capture the ticket a screenful at
+ * a time.
+ *
+ * Windows caps a window at the size of the screen, so a till on a 1024x768
+ * panel gives a 720-row viewport no matter what was asked for. Slices are
+ * therefore as tall as the viewport really is, read back from the page, and a
+ * capture that comes back the wrong size is an error: rescaling it to the
+ * requested slice stretched the ticket and threw away everything below the
+ * fold, which is how a kitchen ticket came out 1.4x too tall and missing its
+ * last items.
  */
-async function receiptRaster(html) {
+async function receiptRaster(html, { sliceDots = SLICE_DOTS } = {}) {
   const win = rasterSurface();
   try {
     await loadDocument(win, html);
     const measured = await win.webContents.executeJavaScript(MEASURE_SCRIPT);
     assertMeasurement(measured);
 
+    const view = measured.view || {};
+    if (view.width !== PRINTER_DOTS) {
+      throw new Error(
+        `The ticket needs ${PRINTER_DOTS} dots across but this screen only gives ${view.width}. Use a display at least 1024 pixels wide.`,
+      );
+    }
+    const slice = Math.min(sliceDots, view.height);
+    if (!Number.isFinite(slice) || slice < 16) {
+      throw new Error("This screen is too small to render a ticket.");
+    }
+
     const height = measured.height + BOTTOM_GUARD_DOTS;
     const bitmap = Buffer.alloc(PRINTER_DOTS * height * 4, 255);
-    for (let top = 0; top < height; top += SLICE_DOTS) {
-      const rows = Math.min(SLICE_DOTS, height - top);
+    for (let top = 0; top < height; top += slice) {
+      const rows = Math.min(slice, height - top);
       await win.webContents.executeJavaScript(
         `new Promise((resolve) => {
           document.body.style.transform = 'translateY(${-top}px)';
@@ -268,7 +289,7 @@ async function receiptRaster(html) {
         })`,
       );
       win.webContents.invalidate();
-      let image = await win.webContents.capturePage({
+      const image = await win.webContents.capturePage({
         x: 0,
         y: 0,
         width: PRINTER_DOTS,
@@ -276,18 +297,17 @@ async function receiptRaster(html) {
       });
       if (image.isEmpty()) throw new Error("Could not render the ticket.");
       const size = image.getSize();
-      if (size.width !== PRINTER_DOTS || size.height !== rows) {
-        image = image.resize({ width: PRINTER_DOTS, height: rows });
-      }
-      const slice = image.toBitmap();
-      // A display scale factor other than 1 would hand back more pixels than
-      // the slice can hold, and a silent partial copy would shear the ticket.
-      if (slice.length !== PRINTER_DOTS * rows * 4) {
+      const pixels = image.toBitmap();
+      if (
+        size.width !== PRINTER_DOTS ||
+        size.height !== rows ||
+        pixels.length !== PRINTER_DOTS * rows * 4
+      ) {
         throw new Error(
-          "The screen capture came back at the wrong resolution. Set Windows display scaling to 100% and reprint.",
+          `The screen capture came back as ${size.width}x${size.height} instead of ${PRINTER_DOTS}x${rows}. Set the display to 100% scaling and at least 1024x768, then reprint.`,
         );
       }
-      slice.copy(bitmap, top * PRINTER_DOTS * 4);
+      pixels.copy(bitmap, top * PRINTER_DOTS * 4);
     }
 
     verifyRaster(bitmap, height, measured);
