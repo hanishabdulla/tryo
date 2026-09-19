@@ -53,32 +53,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $assets = (Get-ChildItem apps/pos/release/*.exe, apps/pos/release/*.blockmap).FullName
-          $notes = @"
+          # A literal here-string: the notes carry backticks, which PowerShell would
+          # otherwise read as escape characters.
+          $notes = @'
           ## Tryo POS for Windows
 
-          ### Live collection queue
-          - Website collection orders now appear in the POS immediately.
-          - New-order alerts show customer, item, note and total details.
-          - Staff can move orders through New, Preparing, Ready and Collected.
-          - Online payment remains disabled; payment is clearly marked as due on collection.
+          ### Kitchen tickets and receipts print in full
+          - Fixes tickets that fed out missing their last items, with no error shown. Order #6 on 19 September printed six of its seven lines and lost the item count.
+          - Both tickets are now built from the order itself rather than copied out of the till screen. The layout that is measured is the layout that prints, so a font difference between screen and printer can no longer shorten a ticket.
+          - Every ticket is checked against the order before any bytes reach the printer. A missing line, a blank render or a bad measurement now raises an error on the till instead of feeding an incomplete ticket.
+          - Every ticket ends with a solid bar. If the bar is missing the job is refused, so staff can tell at a glance that a slip is complete.
+          - Fixes a fault where the second ticket of an order could fail to render at all.
+          - Tickets are laid out at the printer resolution of 576 dots per line, so text is sharper and nothing is rescaled.
+          - Chosen options reading "None" no longer print on the kitchen ticket.
 
-          ### Desktop startup
-          - Fixes the packaged monorepo server path that prevented the Windows app from opening.
-          - Verifies the embedded production server starts before a release is published.
-
-          ### Receipt choice
-          - Checkout now offers **Kitchen + customer** or **Kitchen only**.
-          - The kitchen ticket always prints, avoiding unnecessary customer receipts when one is not wanted.
-          - **Reprint last** follows the receipt choice made for that order.
-
-          ### Cleaner totals
-          - The final total always prints.
-          - Subtotal, discount and delivery rows only appear when they are relevant.
-          - Zero-value delivery fees are no longer printed.
-
-          ### Production and exports
-          - Connects to the Tryo production Convex deployment.
-          - Replaces the vulnerable legacy spreadsheet package used by dashboard Excel exports.
+          ### Order details in the dashboard
+          - Click any order in Daily summary or Sales by date range to open it.
+          - Shows every line with quantity, unit price, meal, seasoning, sauce, add-ons and kitchen notes.
+          - Shows subtotal, the discount with the percentage or amount that produced it, delivery fee and total paid.
+          - Shows payment method, with cash given and change, plus status and customer details on website orders.
 
           ### Setup
           1. Download and run the `.exe` installer.
@@ -86,6 +79,8 @@ jobs:
           3. Open Tryo POS, choose **Receipt printer**, select the device, and run **Test print**.
           4. Save the printer. Completed orders then print silently and **Reprint last** remains available.
 
+          Set Windows display scaling to 100% on the till. The app now reports an error rather than printing a distorted ticket if it is set higher.
+
           This build uses the production Convex deployment and requires an internet connection.
-          "@
+          '@
           gh release create $env:GITHUB_REF_NAME $assets --title "Tryo POS $env:GITHUB_REF_NAME" --notes $notes

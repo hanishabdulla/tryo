@@ -1,6 +1,6 @@
 {
   "name": "@tryo/pos",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Tryo takeaway point of sale",
   "author": "Tryo",
@@ -52,6 +52,7 @@
     "files": [
       "electron/**/*",
       "!electron/**/*.test.cjs",
+      "!electron/**/*.test-build.cjs",
       "package.json",
       "!node_modules/**/*"
     ],
