@@ -58,18 +58,31 @@ jobs:
           $notes = @'
           ## Tryo POS for Windows
 
-          ### Checkout on smaller till screens
-          - The payment window now fits the available screen height and scrolls when necessary.
-          - Cancel and Submit Order stay visible at the bottom, so staff can always complete an order on a 1024x768 POS display.
+          ### Checkout rebuilt for the till screen
+          - The payment window is now one wide layout - amount due and payment method, discount and receipt choice, and a built-in number pad side by side.
+          - It fits a 1366x768 POS screen with nothing cut off and no scrolling, including when taking cash.
+          - Quick cash buttons (5, 10, 20, 50) and an Exact button fill the cash amount in one tap.
+          - Submit now shows the amount being taken.
 
-          ### No-bill orders
-          - Adds a **No bill** choice alongside **Kitchen + customer** and **Kitchen only**.
-          - No-bill orders are saved and paid normally without printing a kitchen ticket or customer receipt.
+          ### Built-in on-screen keyboard
+          - The till draws its own number pad and keyboard inside the app, so the Windows touch keyboard no longer pops up over the field being filled in.
+          - Dialogs reserve room for it, keeping the active field visible while typing.
+          - Used for custom items, custom instructions, opening float, cash movements, cash-up and the menu editor.
+          - Machines with a physical keyboard are unaffected and keep typing normally.
 
-          ### Reprint customer bills
-          - Adds **Reprint bill** to the top-right of every order detail window in the dashboard.
-          - Reprints only the customer receipt through the receipt printer configured on the POS machine.
-          - Historical totals remain exact, with stored meal, option, add-on and note details included.
+          ### Amend an order before it is paid
+          - Every line in the current order has an **Edit** button that reopens it with its meal choice, extras, custom instructions and quantity already filled in.
+          - Editing a line so that it matches another line already in the order merges the two.
+          - Custom items can be edited the same way, including their quantity.
+
+          ### Insights
+          - New **Insights** tab in the dashboard: top items sold with a search box, sales by day, busiest hours and weekdays, sales by category, and how often meals and paid extras get added.
+          - Date range with Today, last 7, 30 and 90 day presets.
+
+          ### Smaller changes
+          - Dashboard orders are listed newest first.
+          - Summaries and the PDF export show the **median** order rather than the average, which better reflects what a typical customer spends.
+          - The paid extras editor in the menu no longer collapses the name field, and its rows line up.
 
           ### Setup
           1. Download and run the `.exe` installer.

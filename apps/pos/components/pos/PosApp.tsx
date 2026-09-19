@@ -20,6 +20,12 @@ import {
   printDocumentsInBrowser,
   receiptLogoDataUrl,
 } from "@/lib/receipt-printing";
+import {
+  NumberPad,
+  applyNumberKey,
+  type NumberPadKey,
+} from "@/components/touch/NumberPad";
+import { TouchInput, useTouchKeyboard } from "@/components/touch/TouchKeyboard";
 import { CollectionQueue } from "./CollectionQueue";
 import { TillManager } from "./TillManager";
 
@@ -107,9 +113,14 @@ export default function PosApp() {
     activeCategory ? { category: activeCategory.name } : "skip",
   );
 
-  const mealEligible = activeCategory?.mealUpgrade ?? false;
+  // Editing a line already in the cart needs that line's menu item, which may
+  // sit in a category other than the one currently on screen.
+  const allMenuItems = useQuery(api.menu.listAllItems, {}) as
+    | (MenuRow & { category: string })[]
+    | undefined;
 
   const submitOrder = useMutation(api.orders.submitOrder);
+  const { touchMode } = useTouchKeyboard();
 
   const mealUpchargePence = useMemo(() => {
     const v = config?.mealUpcharge;
@@ -172,9 +183,19 @@ export default function PosApp() {
   const [sheetOptions, setSheetOptions] = useState<string[]>([]);
   const [sheetNote, setSheetNote] = useState("");
   const [sheetNoteOpen, setSheetNoteOpen] = useState(false);
+  /** Category the open sheet belongs to; not always the one on screen. */
+  const [sheetCategoryName, setSheetCategoryName] = useState<string | null>(null);
+  /** Cart line the sheet is amending, or null when adding a new line. */
+  const [sheetEditKey, setSheetEditKey] = useState<string | null>(null);
   const [customItemOpen, setCustomItemOpen] = useState(false);
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPriceRaw, setCustomItemPriceRaw] = useState("");
+  const [customItemQty, setCustomItemQty] = useState(1);
+  const [customEditKey, setCustomEditKey] = useState<string | null>(null);
+
+  const sheetCategory =
+    categories?.find((c) => c.name === sheetCategoryName) ?? activeCategory;
+  const mealEligible = sheetCategory?.mealUpgrade ?? false;
 
   const [payOpen, setPayOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<"card" | "cash">("card");
@@ -184,6 +205,8 @@ export default function PosApp() {
   );
   const [discountRaw, setDiscountRaw] = useState("");
   const [receiptMode, setReceiptMode] = useState<ReceiptMode>("both");
+  /** Which money field the payment keypad is typing into. */
+  const [payFocus, setPayFocus] = useState<"discount" | "given">("discount");
 
   const [receipt, setReceipt] = useState<ReceiptPayload | null>(null);
   const [orderBusy, setOrderBusy] = useState(false);
@@ -326,8 +349,10 @@ export default function PosApp() {
   const changeShort =
     payMethod === "cash" && givenPence !== null && givenPence < amountDuePence;
 
-  const openItemSheet = useCallback((item: MenuRow) => {
+  const openItemSheet = useCallback((item: MenuRow, categoryName: string) => {
     setSheetItem(item);
+    setSheetCategoryName(categoryName);
+    setSheetEditKey(null);
     setSheetMeal(false);
     setSheetQty(1);
     setSheetOptions([]);
@@ -340,7 +365,7 @@ export default function PosApp() {
     .reduce((sum, o) => sum + o.price, 0);
 
   const addFromSheet = useCallback(() => {
-    if (!sheetItem || !activeCategory) return;
+    if (!sheetItem || !sheetCategory) return;
     const isMeal = mealEligible && sheetMeal;
     const up = isMeal ? mealUpchargePence : 0;
     const options = (sheetItem.options ?? []).filter((o) =>
@@ -351,40 +376,50 @@ export default function PosApp() {
       sheetItem.basePrice + up + options.reduce((sum, o) => sum + o.price, 0);
     const label = isMeal ? activeMealComboLabel : null;
     const key = lineKey(sheetItem.name, isMeal, options, note);
+    const newLine: CartLine = {
+      lineKey: key,
+      itemName: sheetItem.name,
+      sourceCategory: sheetCategory.name,
+      mealEligible,
+      isMeal,
+      mealLabel: label,
+      basePricePence: sheetItem.basePrice,
+      mealUpchargePence: up,
+      unitPricePence: unit,
+      quantity: sheetQty,
+      options,
+      note,
+    };
+
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.lineKey === key);
+      // An edit replaces the old line outright, so its previous quantity is
+      // discarded rather than added to whatever the sheet now shows.
+      const base = sheetEditKey
+        ? prev.filter((l) => l.lineKey !== sheetEditKey)
+        : prev;
+      const idx = base.findIndex((l) => l.lineKey === key);
       if (idx === -1) {
-        return [
-          ...prev,
-          {
-            lineKey: key,
-            itemName: sheetItem.name,
-            sourceCategory: activeCategory.name,
-            mealEligible,
-            isMeal,
-            mealLabel: label,
-            basePricePence: sheetItem.basePrice,
-            mealUpchargePence: up,
-            unitPricePence: unit,
-            quantity: sheetQty,
-            options,
-            note,
-          },
-        ];
+        if (!sheetEditKey) return [...base, newLine];
+        // Keep an amended line where it was, so the cart does not reshuffle
+        // under the cashier's finger.
+        const at = prev.findIndex((l) => l.lineKey === sheetEditKey);
+        const next = [...base];
+        next.splice(at === -1 ? next.length : at, 0, newLine);
+        return next;
       }
-      const next = [...prev];
-      next[idx] = {
-        ...next[idx],
-        quantity: next[idx].quantity + sheetQty,
-      };
+      // The edit turned this line into one that is already in the cart: merge.
+      const next = [...base];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity + sheetQty };
       return next;
     });
     setSheetItem(null);
+    setSheetEditKey(null);
   }, [
-    activeCategory,
     activeMealComboLabel,
     mealEligible,
     mealUpchargePence,
+    sheetCategory,
+    sheetEditKey,
     sheetItem,
     sheetMeal,
     sheetNote,
@@ -414,49 +449,105 @@ export default function PosApp() {
     customPricePence !== null &&
     customPricePence > 0;
 
+  const closeCustomItem = useCallback(() => {
+    setCustomItemOpen(false);
+    setCustomEditKey(null);
+    setCustomItemName("");
+    setCustomItemPriceRaw("");
+    setCustomItemQty(1);
+  }, []);
+
   const addCustomItemToCart = useCallback(() => {
     const name = customItemName.trim().slice(0, 120);
     const price = parsePenceFromInput(customItemPriceRaw);
     if (!name || price === null || price <= 0) return;
     const key = customCartLineKey(name, price);
+    const quantity = Math.max(1, customItemQty);
+
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.lineKey === key);
-      if (idx === -1) {
-        return [
-          ...prev,
-          {
-            lineKey: key,
-            itemName: name,
-            sourceCategory: "Custom",
-            mealEligible: false,
-            isMeal: false,
-            mealLabel: null,
-            basePricePence: price,
-            mealUpchargePence: 0,
-            unitPricePence: price,
-            quantity: 1,
-            options: [],
-            note: "",
-          },
-        ];
-      }
-      const next = [...prev];
-      next[idx] = {
-        ...next[idx],
-        quantity: next[idx].quantity + 1,
+      const base = customEditKey
+        ? prev.filter((l) => l.lineKey !== customEditKey)
+        : prev;
+      const idx = base.findIndex((l) => l.lineKey === key);
+      const newLine: CartLine = {
+        lineKey: key,
+        itemName: name,
+        sourceCategory: "Custom",
+        mealEligible: false,
+        isMeal: false,
+        mealLabel: null,
+        basePricePence: price,
+        mealUpchargePence: 0,
+        unitPricePence: price,
+        quantity,
+        options: [],
+        note: "",
       };
+      if (idx === -1) {
+        if (!customEditKey) return [...base, newLine];
+        const at = prev.findIndex((l) => l.lineKey === customEditKey);
+        const next = [...base];
+        next.splice(at === -1 ? next.length : at, 0, newLine);
+        return next;
+      }
+      const next = [...base];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
       return next;
     });
-    setCustomItemOpen(false);
-    setCustomItemName("");
-    setCustomItemPriceRaw("");
-  }, [customItemName, customItemPriceRaw]);
+    closeCustomItem();
+  }, [
+    closeCustomItem,
+    customEditKey,
+    customItemName,
+    customItemPriceRaw,
+    customItemQty,
+  ]);
+
+  /**
+   * Reopen the sheet that created a cart line so the cashier can change the
+   * meal choice, extras, custom instructions or quantity without having to
+   * remove the line and ring it up again.
+   */
+  const editCartLine = useCallback(
+    (line: CartLine) => {
+      if (isCustomCartLine(line.lineKey)) {
+        setCustomEditKey(line.lineKey);
+        setCustomItemName(line.itemName);
+        setCustomItemPriceRaw((line.unitPricePence / 100).toFixed(2));
+        setCustomItemQty(line.quantity);
+        setCustomItemOpen(true);
+        return;
+      }
+
+      const menuItem = allMenuItems?.find(
+        (i) => i.name === line.itemName && i.category === line.sourceCategory,
+      );
+      setSheetItem(
+        menuItem ?? {
+          // The menu item was renamed or deleted since it was rung up. Keep the
+          // line editable using the prices and extras stored on the line.
+          _id: line.lineKey,
+          name: line.itemName,
+          basePrice: line.basePricePence,
+          options: line.options,
+        },
+      );
+      setSheetCategoryName(line.sourceCategory);
+      setSheetEditKey(line.lineKey);
+      setSheetMeal(line.isMeal);
+      setSheetQty(line.quantity);
+      setSheetOptions(line.options.map((o) => o.name));
+      setSheetNote(line.note);
+      setSheetNoteOpen(line.note.length > 0);
+    },
+    [allMenuItems],
+  );
 
   const onTileTap = useCallback(
     (item: MenuRow) => {
-      openItemSheet(item);
+      openItemSheet(item, activeCategory?.name ?? "");
     },
-    [openItemSheet],
+    [activeCategory, openItemSheet],
   );
 
   const submit = useCallback(async () => {
@@ -566,6 +657,7 @@ export default function PosApp() {
     setDiscountKind("percentage");
     setDiscountRaw("");
     setReceiptMode("both");
+    setPayFocus("discount");
   }, [
     amountDuePence,
     businessAddress,
@@ -582,6 +674,19 @@ export default function PosApp() {
     tillTakingOrders,
     totalItemCount,
   ]);
+
+  /** The payment keypad always types into whichever field is highlighted. */
+  const applyPadKey = (key: NumberPadKey) => {
+    if (payFocus === "given") {
+      setGivenRaw((raw) => applyNumberKey(raw, key));
+      return;
+    }
+    setDiscountRaw((raw) =>
+      applyNumberKey(raw, key, {
+        maxIntegerDigits: discountKind === "percentage" ? 3 : 6,
+      }),
+    );
+  };
 
   const itemsForGrid = (categoryMenuItems ?? []) as MenuRow[];
 
@@ -770,9 +875,11 @@ export default function PosApp() {
             <button
               type="button"
               onClick={() => {
-                setCustomItemOpen(true);
+                setCustomEditKey(null);
                 setCustomItemName("");
                 setCustomItemPriceRaw("");
+                setCustomItemQty(1);
+                setCustomItemOpen(true);
               }}
               className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 text-sm font-semibold text-zinc-300 transition-colors hover:border-[#00955e]/60 hover:bg-[#00955e]/[0.06] hover:text-white active:scale-[0.99]"
             >
@@ -857,13 +964,22 @@ export default function PosApp() {
                           +
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        className="min-h-12 rounded-xl px-4 text-sm font-semibold text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
-                        onClick={() => removeLine(line.lineKey)}
-                      >
-                        Remove
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="min-h-12 rounded-xl px-4 text-sm font-semibold text-zinc-300 transition-colors hover:bg-[#00955e]/[0.12] hover:text-white"
+                          onClick={() => editCartLine(line)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-12 rounded-xl px-4 text-sm font-semibold text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                          onClick={() => removeLine(line.lineKey)}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -903,6 +1019,7 @@ export default function PosApp() {
                 setGivenRaw("");
                 setDiscountKind("percentage");
                 setDiscountRaw("");
+                setPayFocus("discount");
               }}
               className="mt-1 flex min-h-14 w-full items-center justify-center rounded-xl bg-[#00955e] text-lg font-bold text-white shadow-[var(--tryo-glow)] transition-colors hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-zinc-500 disabled:shadow-none"
             >
@@ -914,12 +1031,12 @@ export default function PosApp() {
 
       {sheetItem ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 pb-[calc(0.75rem+var(--osk-inset,0px))] backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="item-sheet-title"
         >
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
+          <div className="max-h-[calc(100dvh-1.5rem-var(--osk-inset,0px))] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2
@@ -928,6 +1045,11 @@ export default function PosApp() {
                 >
                   {sheetItem.name}
                 </h2>
+                {sheetEditKey ? (
+                  <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#34c68a]">
+                    Editing this line
+                  </p>
+                ) : null}
                 <p className="mt-1 text-sm text-zinc-400">
                   {mealEligible || sheetItem.options?.length ? "Base " : "Price "}
                   {formatPence(sheetItem.basePrice)}
@@ -947,7 +1069,10 @@ export default function PosApp() {
               <button
                 type="button"
                 className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
-                onClick={() => setSheetItem(null)}
+                onClick={() => {
+                  setSheetItem(null);
+                  setSheetEditKey(null);
+                }}
                 aria-label="Close"
               >
                 ×
@@ -1035,11 +1160,14 @@ export default function PosApp() {
                 <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
                   Custom instructions
                 </span>
-                <textarea
-                  value={sheetNote}
-                  onChange={(e) => setSheetNote(e.target.value)}
-                  maxLength={200}
+                <TouchInput
+                  multiline
                   rows={2}
+                  keyboard="text"
+                  label="Custom instructions"
+                  value={sheetNote}
+                  onValueChange={setSheetNote}
+                  maxLength={200}
                   autoFocus
                   placeholder="e.g. no onions, sauce on the side"
                   className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 py-3 text-base text-white outline-none focus:border-[#00955e]/70"
@@ -1085,7 +1213,10 @@ export default function PosApp() {
               <button
                 type="button"
                 className="min-h-14 rounded-2xl bg-zinc-800 font-semibold text-white"
-                onClick={() => setSheetItem(null)}
+                onClick={() => {
+                  setSheetItem(null);
+                  setSheetEditKey(null);
+                }}
               >
                 Cancel
               </button>
@@ -1094,7 +1225,7 @@ export default function PosApp() {
                 className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c]"
                 onClick={addFromSheet}
               >
-                Add to Cart
+                {sheetEditKey ? "Save changes" : "Add to Cart"}
               </button>
             </div>
           </div>
@@ -1103,69 +1234,90 @@ export default function PosApp() {
 
       {customItemOpen ? (
         <div
-          className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-[45] flex items-end justify-center bg-black/70 p-3 pb-[calc(0.75rem+var(--osk-inset,0px))] backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-item-title"
         >
-          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
+          <div className="max-h-[calc(100dvh-1.5rem-var(--osk-inset,0px))] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-3">
-              <h2
-                id="custom-item-title"
-                className="text-xl font-bold text-white"
-              >
-                Custom item
-              </h2>
+              <div>
+                <h2
+                  id="custom-item-title"
+                  className="text-xl font-bold text-white"
+                >
+                  {customEditKey ? "Edit custom item" : "Custom item"}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Not on the menu — name and price only.
+                </p>
+              </div>
               <button
                 type="button"
                 className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
-                onClick={() => {
-                  setCustomItemOpen(false);
-                  setCustomItemName("");
-                  setCustomItemPriceRaw("");
-                }}
+                onClick={closeCustomItem}
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <p className="mt-1 text-sm text-zinc-500">
-              Not on the menu — name and price only.
-            </p>
 
             <label className="mt-5 block text-sm font-semibold text-zinc-300">
               Item
             </label>
-            <input
-              type="text"
+            <TouchInput
+              keyboard="text"
+              label="Custom item name"
               autoComplete="off"
               maxLength={120}
               className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-lg font-semibold text-white outline-none focus:border-[#00955e]/70"
               value={customItemName}
-              onChange={(e) => setCustomItemName(e.target.value)}
+              onValueChange={setCustomItemName}
               placeholder="e.g. Extra sauce pot"
             />
 
             <label className="mt-4 block text-sm font-semibold text-zinc-300">
               Price
             </label>
-            <input
-              inputMode="decimal"
+            <TouchInput
+              keyboard="decimal"
+              label="Custom item price (£)"
               className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
               value={customItemPriceRaw}
-              onChange={(e) => setCustomItemPriceRaw(e.target.value)}
+              onValueChange={setCustomItemPriceRaw}
               placeholder="0.00"
             />
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-zinc-300">Quantity</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-800 text-2xl font-semibold"
+                  onClick={() => setCustomItemQty((q) => Math.max(1, q - 1))}
+                  aria-label="Decrease quantity"
+                >
+                  −
+                </button>
+                <div className="min-w-[3rem] text-center text-xl font-bold">
+                  {customItemQty}
+                </div>
+                <button
+                  type="button"
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-800 text-2xl font-semibold"
+                  onClick={() => setCustomItemQty((q) => q + 1)}
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+            </div>
 
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 className="min-h-14 rounded-2xl border border-zinc-700 bg-zinc-950 font-semibold text-white hover:bg-zinc-800"
-                onClick={() => {
-                  setCustomItemOpen(false);
-                  setCustomItemName("");
-                  setCustomItemPriceRaw("");
-                }}
+                onClick={closeCustomItem}
               >
                 Cancel
               </button>
@@ -1175,7 +1327,7 @@ export default function PosApp() {
                 className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 onClick={addCustomItemToCart}
               >
-                Add
+                {customEditKey ? "Save changes" : "Add"}
               </button>
             </div>
           </div>
@@ -1189,17 +1341,22 @@ export default function PosApp() {
           aria-modal="true"
           aria-labelledby="pay-title"
         >
-          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#131316] shadow-2xl shadow-black/60">
-            <div className="flex shrink-0 items-start justify-between gap-3 px-6 pt-6">
-              <div>
-                <h2 id="pay-title" className="text-xl font-bold text-white">
+          {/* Laid out wide rather than tall: the till panel is 1366×768, so a
+              single column would force the cashier to scroll mid-payment. */}
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[#131316] shadow-2xl shadow-black/60">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] px-5 py-3.5">
+              <div className="flex items-baseline gap-3">
+                <h2 id="pay-title" className="text-lg font-bold text-white">
                   Payment
                 </h2>
-                <p className="mt-1 text-sm text-zinc-400">Walk-in takeaway</p>
+                <span className="text-sm text-zinc-500">
+                  Walk-in takeaway · {totalItemCount} item
+                  {totalItemCount === 1 ? "" : "s"}
+                </span>
               </div>
               <button
                 type="button"
-                className="min-h-12 min-w-12 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
+                className="min-h-11 min-w-11 rounded-2xl bg-zinc-800 text-lg text-zinc-200"
                 onClick={() => setPayOpen(false)}
                 aria-label="Close payment"
               >
@@ -1207,204 +1364,280 @@ export default function PosApp() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
-            <div className="mt-4 space-y-1 text-sm text-zinc-400">
-              <div className="flex justify-between gap-3">
-                <span>Subtotal</span>
-                <span className="font-semibold text-zinc-200">
-                  {formatPence(cartSubtotalPence)}
-                </span>
-              </div>
-              {discountPence > 0 ? (
-                <div className="flex justify-between gap-3 text-[#34c68a]">
-                  <span>
-                    {discountKind === "percentage"
-                      ? `Discount (${parsePercentDiscountInput(discountRaw)}%)`
-                      : "Discount"}
-                  </span>
-                  <span className="shrink-0 font-semibold">
-                    {formatPence(-discountPence)}
-                  </span>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(250px,270px)]">
+                {/* Column 1 — what is owed, and how it is being paid. */}
+                <div className="flex flex-col gap-4">
+                  <div className="rounded-2xl border border-white/[0.07] bg-zinc-950/70 px-4 py-3">
+                    <div className="flex justify-between gap-3 text-sm text-zinc-400">
+                      <span>Subtotal</span>
+                      <span className="font-semibold text-zinc-200">
+                        {formatPence(cartSubtotalPence)}
+                      </span>
+                    </div>
+                    {discountPence > 0 ? (
+                      <div className="mt-1 flex justify-between gap-3 text-sm text-[#34c68a]">
+                        <span>
+                          {discountKind === "percentage"
+                            ? `Discount (${parsePercentDiscountInput(discountRaw)}%)`
+                            : "Discount"}
+                        </span>
+                        <span className="shrink-0 font-semibold">
+                          {formatPence(-discountPence)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="mt-2.5 border-t border-white/[0.07] pt-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                        Amount due
+                      </p>
+                      <div className="mt-0.5 text-4xl font-extrabold leading-none text-[#34c68a]">
+                        {formatPence(amountDuePence)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Payment method
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayMethod("card");
+                          setPayFocus("discount");
+                        }}
+                        className={[
+                          "min-h-14 rounded-2xl border text-base font-bold",
+                          payMethod === "card"
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        Card
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayMethod("cash");
+                          setPayFocus("given");
+                        }}
+                        className={[
+                          "min-h-14 rounded-2xl border text-base font-bold",
+                          payMethod === "cash"
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        Cash
+                      </button>
+                    </div>
+                  </div>
+
+                  {payMethod === "cash" ? (
+                    <div>
+                      <label
+                        htmlFor="pay-given"
+                        className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500"
+                      >
+                        Cash given
+                      </label>
+                      <input
+                        id="pay-given"
+                        inputMode={touchMode ? "none" : "decimal"}
+                        readOnly={touchMode}
+                        value={givenRaw}
+                        onChange={(e) => setGivenRaw(e.target.value)}
+                        onFocus={() => setPayFocus("given")}
+                        onPointerDown={() => setPayFocus("given")}
+                        placeholder="0.00"
+                        className={[
+                          "mt-1.5 h-14 w-full rounded-2xl border bg-zinc-950 px-4 text-2xl font-bold text-white outline-none",
+                          touchMode ? "cursor-pointer caret-transparent" : "",
+                          payFocus === "given"
+                            ? "border-[#00955e] ring-2 ring-[#00955e]/30"
+                            : "border-white/[0.07]",
+                        ].join(" ")}
+                      />
+                      <div className="mt-2 grid grid-cols-4 gap-2">
+                        {[500, 1000, 2000, 5000].map((pence) => (
+                          <button
+                            key={pence}
+                            type="button"
+                            onClick={() => {
+                              setGivenRaw((pence / 100).toFixed(2));
+                              setPayFocus("given");
+                            }}
+                            className="min-h-11 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-bold text-zinc-200 hover:bg-white/[0.08]"
+                          >
+                            {formatPence(pence)}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGivenRaw((amountDuePence / 100).toFixed(2));
+                          setPayFocus("given");
+                        }}
+                        className="mt-2 min-h-11 w-full rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-bold text-zinc-200 hover:bg-white/[0.08]"
+                      >
+                        Exact {formatPence(amountDuePence)}
+                      </button>
+                      <div
+                        className={[
+                          "mt-2 rounded-2xl border px-4 py-2.5 text-lg font-bold",
+                          changeShort
+                            ? "border-red-500/60 bg-red-950/40 text-red-200"
+                            : "border-white/[0.07] bg-zinc-950 text-white",
+                        ].join(" ")}
+                      >
+                        Change due:{" "}
+                        {givenPence === null ? "—" : formatPence(changePence ?? 0)}
+                      </div>
+                      {changeShort ? (
+                        <p className="mt-1.5 text-sm font-semibold text-red-300">
+                          Cash given is less than the amount due.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm leading-relaxed text-zinc-400">
+                      Card is recorded for the till. The customer completes
+                      payment on the separate card terminal.
+                    </p>
+                  )}
                 </div>
-              ) : null}
-            </div>
-            <p className="mt-2 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Amount due
-            </p>
-            <div className="text-center text-4xl font-extrabold text-[#34c68a]">
-              {formatPence(amountDuePence)}
-            </div>
 
-            <div className="mt-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                Discount
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscountKind("percentage");
-                    setDiscountRaw("");
-                  }}
-                  className={[
-                    "min-h-14 rounded-2xl border text-sm font-bold",
-                    discountKind === "percentage"
-                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Percentage
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscountKind("fixed");
-                    setDiscountRaw("");
-                  }}
-                  className={[
-                    "min-h-14 rounded-2xl border text-sm font-bold",
-                    discountKind === "fixed"
-                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Fixed (£)
-                </button>
-              </div>
-              <label className="mt-3 block text-sm font-semibold text-zinc-300">
-                {discountKind === "percentage"
-                  ? "Percent off subtotal"
-                  : "Amount off subtotal"}
-              </label>
-              <input
-                inputMode="decimal"
-                className="mt-2 h-14 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-xl font-semibold text-white outline-none focus:border-[#00955e]/70"
-                value={discountRaw}
-                onChange={(e) => setDiscountRaw(e.target.value)}
-                placeholder={discountKind === "percentage" ? "0" : "0.00"}
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                {discountKind === "percentage"
-                  ? "Enter 0–100 (decimals allowed). Leave empty for no discount."
-                  : "Enter a pound amount (e.g. 2.50). Capped at subtotal."}
-              </p>
-            </div>
+                {/* Column 2 — the adjustments made at the counter. */}
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Discount
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountKind("percentage");
+                          setDiscountRaw("");
+                          setPayFocus("discount");
+                        }}
+                        className={[
+                          "min-h-12 rounded-2xl border text-sm font-bold",
+                          discountKind === "percentage"
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        Percentage
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountKind("fixed");
+                          setDiscountRaw("");
+                          setPayFocus("discount");
+                        }}
+                        className={[
+                          "min-h-12 rounded-2xl border text-sm font-bold",
+                          discountKind === "fixed"
+                            ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                            : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                        ].join(" ")}
+                      >
+                        Fixed (£)
+                      </button>
+                    </div>
+                    <label
+                      htmlFor="pay-discount"
+                      className="mt-2.5 block text-sm font-semibold text-zinc-300"
+                    >
+                      {discountKind === "percentage"
+                        ? "Percent off subtotal"
+                        : "Amount off subtotal"}
+                    </label>
+                    <input
+                      id="pay-discount"
+                      inputMode={touchMode ? "none" : "decimal"}
+                      readOnly={touchMode}
+                      value={discountRaw}
+                      onChange={(e) => setDiscountRaw(e.target.value)}
+                      onFocus={() => setPayFocus("discount")}
+                      onPointerDown={() => setPayFocus("discount")}
+                      placeholder={discountKind === "percentage" ? "0" : "0.00"}
+                      className={[
+                        "mt-1.5 h-14 w-full rounded-2xl border bg-zinc-950 px-4 text-xl font-semibold text-white outline-none",
+                        touchMode ? "cursor-pointer caret-transparent" : "",
+                        payFocus === "discount"
+                          ? "border-[#00955e] ring-2 ring-[#00955e]/30"
+                          : "border-white/[0.07]",
+                      ].join(" ")}
+                    />
+                    <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
+                      {discountKind === "percentage"
+                        ? "0–100, decimals allowed. Leave empty for no discount."
+                        : "A pound amount, e.g. 2.50. Capped at the subtotal."}
+                    </p>
+                  </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setPayMethod("card")}
-                className={[
-                  "min-h-16 rounded-2xl border text-lg font-bold",
-                  payMethod === "card"
-                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Card
-              </button>
-              <button
-                type="button"
-                onClick={() => setPayMethod("cash")}
-                className={[
-                  "min-h-16 rounded-2xl border text-lg font-bold",
-                  payMethod === "cash"
-                    ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                    : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                ].join(" ")}
-              >
-                Cash
-              </button>
-            </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Receipt
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Choose what prints for this order.
+                    </p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          ["both", "Kitchen + customer"],
+                          ["kitchen", "Kitchen only"],
+                          ["none", "No bill"],
+                        ] as [ReceiptMode, string][]
+                      ).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setReceiptMode(mode)}
+                          className={[
+                            "min-h-14 rounded-2xl border px-2 text-xs font-bold leading-tight",
+                            receiptMode === mode
+                              ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
+                              : "border-white/[0.07] bg-zinc-950 text-zinc-300",
+                          ].join(" ")}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            <div className="mt-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                Receipt
-              </p>
-              <p className="mt-1 text-sm text-zinc-400">
-                Choose what prints for this order.
-              </p>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setReceiptMode("both")}
-                  className={[
-                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
-                    receiptMode === "both"
-                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Kitchen + customer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptMode("kitchen")}
-                  className={[
-                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
-                    receiptMode === "kitchen"
-                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  Kitchen only
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptMode("none")}
-                  className={[
-                    "min-h-14 rounded-2xl border px-2 text-xs font-bold sm:text-sm",
-                    receiptMode === "none"
-                      ? "border-[#00955e]/60 bg-[rgba(0,149,94,0.16)] text-white"
-                      : "border-white/[0.07] bg-zinc-950 text-zinc-300",
-                  ].join(" ")}
-                >
-                  No bill
-                </button>
-              </div>
-            </div>
-
-            {payMethod === "cash" ? (
-              <div className="mt-5 space-y-3">
-                <label className="block text-sm font-semibold text-zinc-300">
-                  Given amount
-                </label>
-                <input
-                  inputMode="decimal"
-                  className="h-16 w-full rounded-2xl border border-white/[0.07] bg-zinc-950 px-4 text-2xl font-semibold text-white outline-none focus:border-[#00955e]/70"
-                  value={givenRaw}
-                  onChange={(e) => setGivenRaw(e.target.value)}
-                  placeholder="0.00"
-                />
-                <div
-                  className={[
-                    "rounded-2xl border px-4 py-3 text-lg font-bold",
-                    changeShort
-                      ? "border-red-500/60 bg-red-950/40 text-red-200"
-                      : "border-white/[0.07] bg-zinc-950 text-white",
-                  ].join(" ")}
-                >
-                  Change due:{" "}
-                  {givenPence === null
-                    ? "—"
-                    : formatPence(changePence ?? 0)}
+                  {orderError ? (
+                    <p
+                      role="alert"
+                      className="rounded-2xl border border-red-900/60 bg-red-950/40 px-4 py-2.5 text-sm text-red-200"
+                    >
+                      {orderError}
+                    </p>
+                  ) : null}
                 </div>
-                {changeShort ? (
-                  <p className="text-sm font-semibold text-red-300">
-                    Given amount is less than the amount due.
+
+                {/* Column 3 — the keypad, so no OS keyboard ever covers this. */}
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Typing into ·{" "}
+                    <span className="text-zinc-300">
+                      {payFocus === "given" ? "Cash given" : "Discount"}
+                    </span>
                   </p>
-                ) : null}
+                  <NumberPad onKey={applyPadKey} size="compact" />
+                </div>
               </div>
-            ) : (
-              <p className="mt-5 text-sm text-zinc-400">
-                Card is recorded for the till. Customer completes payment on the
-                separate card terminal.
-              </p>
-            )}
-
-            {orderError ? <p role="alert" className="mt-4 text-sm text-red-300">{orderError}</p> : null}
             </div>
-            <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-white/[0.07] bg-[#131316] px-6 py-4">
+
+            <div className="grid shrink-0 grid-cols-[1fr_1.4fr] gap-3 border-t border-white/[0.07] bg-[#131316] px-5 py-3.5">
               <button
                 type="button"
                 disabled={orderBusy}
@@ -1415,14 +1648,18 @@ export default function PosApp() {
               </button>
               <button
                 type="button"
-                className="min-h-14 rounded-2xl bg-[#00955e] font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                className="min-h-14 rounded-2xl bg-[#00955e] text-lg font-bold text-white shadow-[var(--tryo-glow)] hover:bg-[#007a4c] active:bg-[#007a4c] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 disabled={
-                  orderBusy || receiptBusy || (payMethod === "cash" &&
-                  (givenPence === null || givenPence < amountDuePence))
+                  orderBusy ||
+                  receiptBusy ||
+                  (payMethod === "cash" &&
+                    (givenPence === null || givenPence < amountDuePence))
                 }
                 onClick={() => void submit()}
               >
-                {orderBusy ? "Saving order…" : "Submit Order"}
+                {orderBusy
+                  ? "Saving order…"
+                  : `Submit ${formatPence(amountDuePence)}`}
               </button>
             </div>
           </div>

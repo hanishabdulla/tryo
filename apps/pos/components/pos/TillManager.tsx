@@ -2,6 +2,7 @@
 
 import { useMutation } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
+import { TouchInput } from "@/components/touch/TouchKeyboard";
 import { api } from "@/lib/convex-api";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 import { todayBusinessDate, type TillDaySummary } from "@/lib/till";
@@ -133,12 +134,12 @@ export function TillManager({ businessDate, day, isOpen, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 p-3 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 p-3 pb-[calc(0.75rem+var(--osk-inset,0px))] backdrop-blur-sm sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="till-manager-title"
     >
-      <div className="max-h-[94dvh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#111114] shadow-2xl shadow-black/70">
+      <div className="max-h-[calc(100dvh-1.5rem-var(--osk-inset,0px))] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#111114] shadow-2xl shadow-black/70">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/[0.07] bg-[#111114]/95 px-6 py-5 backdrop-blur">
           <div>
             <div className="flex items-center gap-2">
@@ -199,11 +200,12 @@ export function TillManager({ businessDate, day, isOpen, onClose }: Props) {
             </div>
             <label className="mt-6 block text-sm font-semibold text-zinc-200">
               Opening cash float
-              <input
-                inputMode="decimal"
+              <TouchInput
+                keyboard="decimal"
+                label="Opening cash float (£)"
                 autoFocus
                 value={openingRaw}
-                onChange={(event) => setOpeningRaw(event.target.value)}
+                onValueChange={setOpeningRaw}
                 placeholder="0.00"
                 className="mt-2 h-16 w-full rounded-2xl border border-white/[0.08] bg-zinc-950 px-4 text-2xl font-bold text-white outline-none focus:border-[#00955e]/70"
               />
@@ -329,22 +331,24 @@ export function TillManager({ businessDate, day, isOpen, onClose }: Props) {
                     </button>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-[160px_1fr_auto]">
-                    <input
-                      inputMode="decimal"
+                    <TouchInput
+                      keyboard="decimal"
+                      label="Cash movement amount (£)"
                       value={movementRaw}
-                      onChange={(event) => setMovementRaw(event.target.value)}
+                      onValueChange={setMovementRaw}
                       placeholder="Amount"
                       aria-label="Cash movement amount"
-                      className="h-12 rounded-xl border border-white/[0.07] bg-zinc-950 px-4 font-semibold text-white outline-none focus:border-[#00955e]/70"
+                      className="h-12 w-full rounded-xl border border-white/[0.07] bg-zinc-950 px-4 font-semibold text-white outline-none focus:border-[#00955e]/70"
                     />
-                    <input
+                    <TouchInput
+                      keyboard="text"
+                      label="Cash movement reason"
                       value={movementReason}
-                      onChange={(event) =>
-                        setMovementReason(event.target.value.slice(0, 120))
-                      }
+                      onValueChange={(next) => setMovementReason(next.slice(0, 120))}
+                      maxLength={120}
                       placeholder="Reason, e.g. cash taken to safe"
                       aria-label="Cash movement reason"
-                      className="h-12 rounded-xl border border-white/[0.07] bg-zinc-950 px-4 text-white outline-none focus:border-[#00955e]/70"
+                      className="h-12 w-full rounded-xl border border-white/[0.07] bg-zinc-950 px-4 text-white outline-none focus:border-[#00955e]/70"
                     />
                     <button
                       type="button"
@@ -373,21 +377,23 @@ export function TillManager({ businessDate, day, isOpen, onClose }: Props) {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <label className="text-xs font-semibold text-zinc-400">
                       Counted cash
-                      <input
-                        inputMode="decimal"
+                      <TouchInput
+                        keyboard="decimal"
+                        label="Counted cash in drawer (£)"
                         value={countedRaw}
-                        onChange={(event) => setCountedRaw(event.target.value)}
+                        onValueChange={setCountedRaw}
                         placeholder="0.00"
                         className="mt-2 h-12 w-full rounded-xl border border-white/[0.07] bg-zinc-950 px-4 text-lg font-bold text-white outline-none focus:border-red-400/60"
                       />
                     </label>
                     <label className="text-xs font-semibold text-zinc-400">
                       Closing note (optional)
-                      <input
+                      <TouchInput
+                        keyboard="text"
+                        label="Closing note"
                         value={closingNote}
-                        onChange={(event) =>
-                          setClosingNote(event.target.value.slice(0, 240))
-                        }
+                        onValueChange={(next) => setClosingNote(next.slice(0, 240))}
+                        maxLength={240}
                         placeholder="Anything to explain"
                         className="mt-2 h-12 w-full rounded-xl border border-white/[0.07] bg-zinc-950 px-4 text-white outline-none focus:border-red-400/60"
                       />

@@ -2,6 +2,7 @@
 
 import type { OrderRow } from "@/lib/finances-excel";
 import { formatPence } from "@/lib/money";
+import { medianOrderPence } from "@/lib/stats";
 
 export function ReportSummary({ orders }: { orders: OrderRow[] | undefined }) {
   const rows = orders ?? [];
@@ -13,8 +14,10 @@ export function ReportSummary({ orders }: { orders: OrderRow[] | undefined }) {
     { label: "Gross sales", value: formatPence(gross), accent: true },
     { label: "Orders", value: String(rows.length) },
     {
-      label: "Average order",
-      value: rows.length ? formatPence(Math.round(gross / rows.length)) : "£0.00",
+      // Median, not mean: one unusually large order should not move the figure
+      // that describes what a typical customer spends.
+      label: "Median order",
+      value: formatPence(medianOrderPence(rows)),
     },
     {
       label: "Card / Cash",

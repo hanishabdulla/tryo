@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
+import { TouchInput } from "@/components/touch/TouchKeyboard";
 import { api } from "@/lib/convex-api";
 import { formatPence, parsePenceFromInput } from "@/lib/money";
 
@@ -48,8 +49,11 @@ async function menuAction(action: string, args: Record<string, unknown>) {
   }
 }
 
-const inputClass =
-  "mt-2 h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white outline-none focus:border-[#00955e]/70";
+const fieldClass =
+  "h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-white outline-none focus:border-[#00955e]/70";
+const inputClass = `mt-2 ${fieldClass}`;
+/** Name · price · remove, so every extras row lines up on the same columns. */
+const extrasRowClass = "grid grid-cols-[minmax(0,1fr)_7rem_3rem] items-center gap-2";
 const smallButton =
   "inline-flex min-h-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-semibold text-zinc-200 hover:border-[#00955e]/40 hover:text-white disabled:opacity-40";
 
@@ -215,11 +219,12 @@ export default function MenuPage() {
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-xs font-medium text-zinc-400">
             Upgrade price (£)
-            <input
-              inputMode="decimal"
+            <TouchInput
+              keyboard="decimal"
+              label="Meal upgrade price (£)"
               value={mealPrice}
-              onChange={(e) => {
-                setMealPrice(e.target.value);
+              onValueChange={(next) => {
+                setMealPrice(next);
                 setMealSaved(false);
               }}
               className={`${inputClass} w-32`}
@@ -227,10 +232,12 @@ export default function MenuPage() {
           </label>
           <label className="text-xs font-medium text-zinc-400">
             Meal includes
-            <input
+            <TouchInput
+              keyboard="text"
+              label="What a meal includes"
               value={mealLabel}
-              onChange={(e) => {
-                setMealLabel(e.target.value);
+              onValueChange={(next) => {
+                setMealLabel(next);
                 setMealSaved(false);
               }}
               className={`${inputClass} w-56`}
@@ -415,13 +422,13 @@ export default function MenuPage() {
 
       {itemDraft ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 pb-[calc(0.75rem+var(--osk-inset,0px))] backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="item-editor-title"
         >
           <form
-            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60"
+            className="max-h-[calc(100dvh-1.5rem-var(--osk-inset,0px))] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#131316] p-6 shadow-2xl shadow-black/60"
             onSubmit={(e) => {
               e.preventDefault();
               void saveItem();
@@ -446,79 +453,108 @@ export default function MenuPage() {
             </label>
             <label className="mt-4 block text-sm font-medium text-zinc-300">
               Name
-              <input
+              <TouchInput
+                keyboard="text"
+                label="Item name"
                 value={itemDraft.name}
                 maxLength={120}
-                onChange={(e) => setItemDraft({ ...itemDraft, name: e.target.value })}
+                onValueChange={(next) => setItemDraft({ ...itemDraft, name: next })}
                 className={inputClass}
                 autoFocus
               />
             </label>
             <label className="mt-4 block text-sm font-medium text-zinc-300">
               Description <span className="text-zinc-500">(optional)</span>
-              <textarea
+              <TouchInput
+                multiline
+                rows={3}
+                keyboard="text"
+                label="Item description"
                 value={itemDraft.description}
                 maxLength={300}
-                rows={3}
-                onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
+                onValueChange={(next) =>
+                  setItemDraft({ ...itemDraft, description: next })
+                }
                 className={`${inputClass} h-auto py-2`}
               />
             </label>
             <label className="mt-4 block text-sm font-medium text-zinc-300">
               Price (£)
-              <input
-                inputMode="decimal"
+              <TouchInput
+                keyboard="decimal"
+                label="Item price (£)"
                 value={itemDraft.price}
-                onChange={(e) => setItemDraft({ ...itemDraft, price: e.target.value })}
+                onValueChange={(next) => setItemDraft({ ...itemDraft, price: next })}
                 className={inputClass}
                 placeholder="6.99"
               />
             </label>
-            <fieldset className="mt-4">
+            <fieldset className="mt-5">
               <legend className="text-sm font-medium text-zinc-300">
-                Extras <span className="text-zinc-500">(optional, shown as add-ons on the till)</span>
+                Paid extras
               </legend>
-              {itemDraft.options.map((option, index) => (
-                <div key={index} className="mt-2 flex gap-2">
-                  <input
-                    aria-label="Extra name"
-                    value={option.name}
-                    maxLength={120}
-                    placeholder="Cheese"
-                    onChange={(e) => {
-                      const options = [...itemDraft.options];
-                      options[index] = { ...option, name: e.target.value };
-                      setItemDraft({ ...itemDraft, options });
-                    }}
-                    className={`${inputClass} mt-0 flex-1`}
-                  />
-                  <input
-                    aria-label="Extra price in pounds"
-                    inputMode="decimal"
-                    value={option.price}
-                    placeholder="1.25"
-                    onChange={(e) => {
-                      const options = [...itemDraft.options];
-                      options[index] = { ...option, price: e.target.value };
-                      setItemDraft({ ...itemDraft, options });
-                    }}
-                    className={`${inputClass} mt-0 w-24`}
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Remove ${option.name || "extra"}`}
-                    onClick={() =>
-                      setItemDraft({
-                        ...itemDraft,
-                        options: itemDraft.options.filter((_, i) => i !== index),
-                      })
-                    }
-                    className="h-12 rounded-xl bg-zinc-800 px-3 text-sm text-zinc-300"
-                  >
-                    ×
-                  </button>
+              <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+                Optional add-ons the till offers when this item is tapped. Each
+                one adds its price on top of the item price — for example
+                Cheese at £1.25.
+              </p>
+              {itemDraft.options.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  <div className={`${extrasRowClass} px-1 text-xs font-medium text-zinc-500`}>
+                    <span>Extra</span>
+                    <span className="text-right">Price (£)</span>
+                    <span className="sr-only">Remove</span>
+                  </div>
+                  {itemDraft.options.map((option, index) => (
+                    <div key={index} className={extrasRowClass}>
+                      <TouchInput
+                        keyboard="text"
+                        label="Extra name"
+                        aria-label="Extra name"
+                        value={option.name}
+                        maxLength={120}
+                        placeholder="Cheese"
+                        onValueChange={(next) => {
+                          const options = [...itemDraft.options];
+                          options[index] = { ...option, name: next };
+                          setItemDraft({ ...itemDraft, options });
+                        }}
+                        className={fieldClass}
+                      />
+                      <TouchInput
+                        keyboard="decimal"
+                        label="Extra price (£)"
+                        aria-label="Extra price in pounds"
+                        value={option.price}
+                        placeholder="1.25"
+                        onValueChange={(next) => {
+                          const options = [...itemDraft.options];
+                          options[index] = { ...option, price: next };
+                          setItemDraft({ ...itemDraft, options });
+                        }}
+                        className={`${fieldClass} text-right tabular-nums`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Remove ${option.name || "extra"}`}
+                        onClick={() =>
+                          setItemDraft({
+                            ...itemDraft,
+                            options: itemDraft.options.filter((_, i) => i !== index),
+                          })
+                        }
+                        className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-lg text-zinc-400 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="mt-3 rounded-xl border border-dashed border-white/[0.08] px-3 py-4 text-center text-sm text-zinc-500">
+                  No extras on this item yet.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() =>
@@ -527,7 +563,7 @@ export default function MenuPage() {
                     options: [...itemDraft.options, { name: "", price: "" }],
                   })
                 }
-                className={`${smallButton} mt-2`}
+                className={`${smallButton} mt-3`}
               >
                 + Add extra
               </button>
@@ -587,7 +623,7 @@ export default function MenuPage() {
 
       {categoryDraft ? (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 pb-[calc(0.75rem+var(--osk-inset,0px))] backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="category-editor-title"
@@ -604,10 +640,14 @@ export default function MenuPage() {
             </h2>
             <label className="mt-4 block text-sm font-medium text-zinc-300">
               Name
-              <input
+              <TouchInput
+                keyboard="text"
+                label="Category name"
                 value={categoryDraft.name}
                 maxLength={120}
-                onChange={(e) => setCategoryDraft({ ...categoryDraft, name: e.target.value })}
+                onValueChange={(next) =>
+                  setCategoryDraft({ ...categoryDraft, name: next })
+                }
                 className={inputClass}
                 autoFocus
               />

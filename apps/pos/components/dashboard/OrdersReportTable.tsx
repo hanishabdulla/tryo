@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatPence } from "@/lib/money";
 import { formatTsLocal } from "@/lib/report-dates";
 import type { OrderRow } from "@/lib/finances-excel";
@@ -16,6 +16,16 @@ export function OrdersReportTable({
   const sumPence = orders.reduce((s, o) => s + o.total, 0);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const openOrder = orders.find((o) => o._id === openOrderId) ?? null;
+
+  // Newest first: the order someone is looking for is almost always the one
+  // that just went through. Exports keep the chronological order.
+  const newestFirst = useMemo(
+    () =>
+      [...orders].sort(
+        (a, b) => b.createdAt - a.createdAt || b.orderNumber - a.orderNumber,
+      ),
+    [orders],
+  );
 
   return (
     <>
@@ -43,7 +53,7 @@ export function OrdersReportTable({
                 </td>
               </tr>
             ) : (
-              orders.map((o, i) => (
+              newestFirst.map((o, i) => (
                 <tr
                   key={o._id}
                   tabIndex={0}
@@ -57,7 +67,9 @@ export function OrdersReportTable({
                   }}
                   className="cursor-pointer border-b border-white/[0.04] transition-colors last:border-0 hover:bg-white/[0.04] focus:bg-white/[0.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#00955e]"
                 >
-                  <td className="px-4 py-3 text-zinc-600">{i + 1}</td>
+                  <td className="px-4 py-3 text-zinc-600">
+                    {newestFirst.length - i}
+                  </td>
                   <td className="px-4 py-3 font-semibold text-white">#{o.orderNumber}</td>
                   <td className="px-4 py-3 text-zinc-400">{formatTsLocal(o.createdAt)}</td>
                   <td className="px-4 py-3 text-right text-zinc-300">{o.totalItemCount}</td>

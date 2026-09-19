@@ -1,5 +1,6 @@
 import type { OrderRow } from "@/lib/finances-excel";
 import { formatPence } from "@/lib/money";
+import { medianOrderPence } from "@/lib/stats";
 import { formatTsLocal } from "@/lib/report-dates";
 
 const GREEN: [number, number, number] = [0, 149, 94];
@@ -75,7 +76,7 @@ export async function downloadFinancesPdf(
   const stats: [string, string][] = [
     ["Gross sales", formatPence(gross)],
     ["Orders", String(orders.length)],
-    ["Average order", orders.length ? formatPence(Math.round(gross / orders.length)) : "£0.00"],
+    ["Median order", formatPence(medianOrderPence(orders))],
     ["Items sold", String(items)],
     ["Card", formatPence(card)],
     ["Cash", formatPence(cash)],
