@@ -56,6 +56,12 @@ jobs:
           $notes = @"
           ## Tryo POS for Windows
 
+          ### Live collection queue
+          - Website collection orders now appear in the POS immediately.
+          - New-order alerts show customer, item, note and total details.
+          - Staff can move orders through New, Preparing, Ready and Collected.
+          - Online payment remains disabled; payment is clearly marked as due on collection.
+
           ### Desktop startup
           - Fixes the packaged monorepo server path that prevented the Windows app from opening.
           - Verifies the embedded production server starts before a release is published.

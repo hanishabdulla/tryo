@@ -16,6 +16,7 @@ import {
   type ReceiptLinePrint,
   type ReceiptPayload,
 } from "./ReceiptStage";
+import { CollectionQueue } from "./CollectionQueue";
 import { TillManager } from "./TillManager";
 
 type ItemOption = { name: string; price: number };
@@ -581,6 +582,7 @@ export default function PosApp() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <CollectionQueue />
           <button
             type="button"
             onClick={() => setTillManagerOpen(true)}
