@@ -35,6 +35,13 @@ export type OrderRow = {
     hotDogCheese?: boolean;
     note?: string;
   }>;
+  // Set on tryoeats.uk orders only; till orders leave them undefined.
+  source?: string;
+  fulfilment?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string | null;
+  customerNote?: string | null;
 };
 
 function penceToPoundsCell(pence: number): number {
